@@ -60,10 +60,31 @@ class Bus:
         stream: str,
         handler: Callable[[dict[str, Any]], Awaitable[None]],
     ) -> None:
-        """Consume messages from a stream in a loop. XACK on success."""
+        """Consume messages from a stream in a loop. XACK on success.
+
+        Also reclaims messages stranded in the PEL of dead consumers (worker
+        crash, container restart) via XAUTOCLAIM every loop iteration. Without
+        this, story-style runs that emit >1 message per panel get stuck
+        forever after a single worker bounce — the new consumer name doesn't
+        see the old PEL entries and XREADGROUP only returns ">" (new only)."""
         await self.ensure_group(stream)
         log.info("listening", extra={"stream": stream, "group": self.group})
+        autoclaim_cursor = "0-0"
         while True:
+            # Reclaim any pending entries idle > 60s before pulling new ones.
+            # XAUTOCLAIM returns (next_cursor, claimed_entries, deleted_ids).
+            try:
+                next_cursor, claimed, _ = await self.redis.xautoclaim(
+                    stream, self.group, self.consumer,
+                    min_idle_time=60_000, start_id=autoclaim_cursor, count=8,
+                )
+                autoclaim_cursor = next_cursor if next_cursor else "0-0"
+                if claimed:
+                    log.info("autoclaimed pending", extra={"stream": stream, "n": len(claimed)})
+                    await self._process(stream, claimed, handler)
+            except aioredis_exc.RedisError as e:
+                log.warning("xautoclaim err", extra={"err": str(e)})
+
             try:
                 resp = await self.redis.xreadgroup(
                     self.group,
@@ -82,25 +103,34 @@ class Bus:
             if not resp:
                 continue
             for _stream, entries in resp:
-                for msg_id, fields in entries:
-                    raw = fields.get(PAYLOAD_FIELD.encode()) or fields.get(PAYLOAD_FIELD)
-                    if raw is None:
-                        log.warning("no payload field", extra={"id": msg_id})
-                        await self.redis.xack(stream, self.group, msg_id)
-                        continue
-                    try:
-                        payload = json.loads(raw)
-                    except json.JSONDecodeError as e:
-                        log.error("bad json", extra={"err": str(e)})
-                        await self.redis.xack(stream, self.group, msg_id)
-                        continue
-                    try:
-                        await handler(payload)
-                    except Exception:
-                        log.exception("handler crashed", extra={"id": msg_id})
-                        # Don't ACK — let it be retried after the deadletter window.
-                        continue
-                    await self.redis.xack(stream, self.group, msg_id)
+                await self._process(stream, entries, handler)
+
+    async def _process(
+        self,
+        stream: str,
+        entries: list,
+        handler: Callable[[dict[str, Any]], Awaitable[None]],
+    ) -> None:
+        """Decode + dispatch a batch of XREADGROUP/XAUTOCLAIM entries."""
+        for msg_id, fields in entries:
+            raw = fields.get(PAYLOAD_FIELD.encode()) or fields.get(PAYLOAD_FIELD)
+            if raw is None:
+                log.warning("no payload field", extra={"id": msg_id})
+                await self.redis.xack(stream, self.group, msg_id)
+                continue
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError as e:
+                log.error("bad json", extra={"err": str(e)})
+                await self.redis.xack(stream, self.group, msg_id)
+                continue
+            try:
+                await handler(payload)
+            except Exception:
+                log.exception("handler crashed", extra={"id": msg_id})
+                # Don't ACK — let autoclaim retry after the deadletter window.
+                continue
+            await self.redis.xack(stream, self.group, msg_id)
 
     async def publish(self, stream: str, payload: dict[str, Any]) -> None:
         body = json.dumps(payload).encode()
