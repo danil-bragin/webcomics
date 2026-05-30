@@ -89,7 +89,7 @@ function ProjectCard({ project: p }: { project: ProjectView }) {
   return (
     <Link
       to={`/projects/${p.id}`}
-      className="group rounded-lg border border-border bg-card hover:border-primary/50 hover:bg-secondary/20 transition-colors flex flex-col overflow-hidden"
+      className="group rounded-lg border border-border bg-card hover:border-primary/50 transition-colors flex flex-col overflow-hidden"
     >
       <div className="p-4 flex items-start gap-3">
         <div className="w-10 h-10 rounded-md bg-primary/15 text-primary flex items-center justify-center text-base font-semibold shrink-0">

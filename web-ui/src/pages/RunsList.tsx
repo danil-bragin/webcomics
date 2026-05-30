@@ -168,7 +168,7 @@ export function RunCard(props: {
       to={`/runs/${props.id}`}
       onClick={onClickWrap}
       className={`relative rounded-lg border bg-card overflow-hidden flex flex-col transition-colors ${
-        props.picked ? "border-primary" : "border-border hover:border-primary/40 hover:bg-secondary/20"
+        props.picked ? "border-primary" : "border-border hover:border-primary/40"
       }`}
     >
       {props.selectMode ? (
