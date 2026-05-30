@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, type PresetView, type PresetCategory } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 const CATEGORIES: { id: PresetCategory | "all"; icon: string; key: string }[] = [
@@ -15,6 +14,15 @@ const CATEGORIES: { id: PresetCategory | "all"; icon: string; key: string }[] = 
   { id: "demo",   icon: "🤫", key: "presets.cat.demo" },
   { id: "custom", icon: "⚙",  key: "presets.cat.custom" },
 ];
+
+// Per-category accent color for the card top stripe — fast visual scan.
+const CATEGORY_COLOR: Record<string, string> = {
+  meme:   "bg-amber-400",
+  shorts: "bg-pink-500",
+  story:  "bg-emerald-500",
+  demo:   "bg-sky-400",
+  custom: "bg-zinc-500",
+};
 
 // Step glyphs render as a visual pipeline chain on each card so the user can
 // glance "this one has voice + music" without reading JSON.
@@ -92,31 +100,47 @@ function PresetCard({ preset, onDelete }: { preset: PresetView; onDelete: () => 
   const steps = (preset.steps ?? []) as { type: string }[];
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex flex-col group relative overflow-hidden">
+      {/* Subtle category accent stripe top */}
+      {preset.category ? (
+        <div className={`h-0.5 w-full ${CATEGORY_COLOR[preset.category] ?? "bg-secondary"}`} />
+      ) : null}
+
       <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="flex items-center gap-2">
-            <span className="text-2xl leading-none">{preset.icon || "📄"}</span>
-            <span className="truncate">{preset.name}</span>
-          </CardTitle>
-          {preset.category ? (
-            <Badge variant="info" className="text-[10px] capitalize">{preset.category}</Badge>
-          ) : null}
+        <div className="flex items-start gap-3">
+          <span className="text-3xl leading-none shrink-0">{preset.icon || "📄"}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2">
+              <CardTitle className="truncate text-base">{preset.name}</CardTitle>
+              {preset.category ? (
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
+                  {preset.category}
+                </span>
+              ) : null}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              {t("presets.stepsCount", { count: steps.length })}
+              {preset.max_cost_usd > 0 ? <> · ≤ ${preset.max_cost_usd.toFixed(2)}</> : null}
+            </div>
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col gap-3">
+
+      <CardContent className="flex-1 flex flex-col gap-3 pb-0">
         {preset.description ? (
-          <p className="text-xs text-muted-foreground line-clamp-3">{preset.description}</p>
-        ) : null}
+          <p className="text-xs text-muted-foreground line-clamp-3 min-h-[3em]">{preset.description}</p>
+        ) : (
+          <p className="text-xs italic opacity-50 min-h-[3em]">{t("presets.noDescription")}</p>
+        )}
 
         {/* Step chain — visual pipeline glyphs */}
-        <div className="flex items-center gap-1 flex-wrap text-base" title={steps.map(s => s.type).join(" → ")}>
+        <div className="flex items-center gap-1 flex-wrap" title={steps.map(s => s.type).join(" → ")}>
           {steps.map((s, i) => (
             <span key={i} className="flex items-center gap-1">
               <span className="rounded bg-secondary/40 w-7 h-7 inline-flex items-center justify-center" title={s.type}>
                 {STEP_ICON[s.type] || "·"}
               </span>
-              {i < steps.length - 1 ? <span className="text-muted-foreground text-xs">→</span> : null}
+              {i < steps.length - 1 ? <span className="text-muted-foreground/60 text-xs">→</span> : null}
             </span>
           ))}
         </div>
@@ -131,33 +155,39 @@ function PresetCard({ preset, onDelete }: { preset: PresetView; onDelete: () => 
             </ul>
           </div>
         ) : null}
-
-        <div className="mt-auto pt-2 flex items-center gap-2 justify-between text-[11px] text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <span title={t("presets.maxCost")}>${preset.max_cost_usd.toFixed(2)}</span>
-            <span>·</span>
-            <span>{t("presets.stepsCount", { count: steps.length })}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Link to={`/presets/${preset.id}/edit`}
-              className="text-xs px-2 py-1 rounded border border-border hover:bg-secondary/40">
-              {t("common.edit")}
-            </Link>
-            <button
-              onClick={() => {
-                if (confirm(t("presets.confirmDelete", { name: preset.name }))) onDelete();
-              }}
-              className="text-xs px-2 py-1 rounded border border-border text-red-400 hover:bg-secondary/40"
-            >
-              ✕
-            </button>
-            <Link to={`/?preset=${preset.id}`}
-              className="text-xs px-3 py-1 rounded bg-primary text-primary-foreground">
-              {t("presets.use")} →
-            </Link>
-          </div>
-        </div>
       </CardContent>
+
+      {/* Primary action — full-width Use button as CTA */}
+      <div className="px-6 pb-3 pt-3 mt-auto">
+        <Link
+          to={`/?preset=${preset.id}`}
+          className="block w-full text-center text-sm font-medium px-3 py-2 rounded bg-primary text-primary-foreground hover:opacity-90"
+        >
+          {t("presets.use")} →
+        </Link>
+      </div>
+
+      {/* Secondary actions reveal on hover so the card looks clean by default */}
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Link
+          to={`/presets/${preset.id}/edit`}
+          title={t("common.edit")}
+          aria-label={t("common.edit")}
+          className="w-7 h-7 inline-flex items-center justify-center rounded bg-background/80 border border-border text-xs hover:bg-secondary/60"
+        >
+          ✎
+        </Link>
+        <button
+          onClick={() => {
+            if (confirm(t("presets.confirmDelete", { name: preset.name }))) onDelete();
+          }}
+          title={t("common.delete")}
+          aria-label={t("common.delete")}
+          className="w-7 h-7 inline-flex items-center justify-center rounded bg-background/80 border border-border text-xs text-red-400 hover:bg-red-500/20"
+        >
+          ✕
+        </button>
+      </div>
     </Card>
   );
 }

@@ -64,6 +64,7 @@ func newPgxUoW(tx pgx.Tx) *pgxUoW {
 			uploadRecords:     writerepo.NewUploadRecordRepository(tx),
 			projects:          writerepo.NewProjectsRepository(tx),
 			audioLib:          writerepo.NewAudioRepository(tx),
+			formats:           writerepo.NewFormatsRepository(tx),
 			outbox:            outbox.NewRepository(tx),
 		},
 	}
@@ -94,6 +95,7 @@ type repositories struct {
 	uploadRecords     UploadRecordWriteRepository
 	projects          ProjectsWriteRepository
 	audioLib          AudioLibWriteRepository
+	formats           FormatsWriteRepository
 	outbox            OutboxRepository
 }
 
@@ -105,4 +107,5 @@ func (r *repositories) PipelineTemplates() PipelineTemplateWriteRepository {
 func (r *repositories) UploadRecords() UploadRecordWriteRepository { return r.uploadRecords }
 func (r *repositories) Projects() ProjectsWriteRepository          { return r.projects }
 func (r *repositories) AudioLib() AudioLibWriteRepository          { return r.audioLib }
+func (r *repositories) Formats() FormatsWriteRepository            { return r.formats }
 func (r *repositories) Outbox() OutboxRepository                   { return r.outbox }

@@ -119,6 +119,17 @@ export const api = {
   listVoices: () => request<ElevenLabsVoice[]>("/api/elevenlabs/voices"),
   listFormats: () => request<FormatView[]>("/api/formats"),
 
+  // Format builder — DB-backed marketplace + editor.
+  getFormat: (id: string) => request<FormatRow>(`/api/formats/${id}`),
+  createFormat: (b: FormatBody) =>
+    request<{ id: string }>("/api/formats", { method: "POST", body: JSON.stringify(b) }),
+  updateFormat: (id: string, b: FormatBody) =>
+    request<void>(`/api/formats/${id}`, { method: "PUT", body: JSON.stringify(b) }),
+  deleteFormat: (id: string) =>
+    request<void>(`/api/formats/${id}`, { method: "DELETE" }),
+  previewFormat: (b: { prefix: string; suffix: string; panel_prompt: string }) =>
+    request<{ composed: string }>("/api/formats/preview", { method: "POST", body: JSON.stringify(b) }),
+
   listProjects: () => request<ProjectView[]>("/api/projects"),
   getProject: (id: string) => request<ProjectDetailView>(`/api/projects/${id}`),
   createProject: (b: ProjectBody) =>
@@ -331,6 +342,30 @@ export type MusicTrack = {
   license: string;
   attribution?: string;
 };
+
+export type FormatRow = {
+  id: string;
+  name: string;
+  description: string;
+  scope: "system" | "user";
+  icon?: string;
+  script_system_suffix?: string;
+  image_prompt_prefix?: string;
+  image_prompt_suffix?: string;
+  image_model?: string;
+  style_reference?: string;
+  fps?: number;
+  width?: number;
+  height?: number;
+  codec?: string;
+  panel_duration_ms?: number;
+  transition?: string;
+  is_system: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type FormatBody = Omit<FormatRow, "is_system" | "created_at" | "updated_at" | "id"> & { id?: string };
 
 export type PresetCategory = "meme" | "shorts" | "story" | "demo" | "custom";
 

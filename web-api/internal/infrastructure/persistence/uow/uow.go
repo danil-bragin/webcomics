@@ -39,5 +39,6 @@ type Repositories interface {
 	UploadRecords() UploadRecordWriteRepository
 	Projects() ProjectsWriteRepository
 	AudioLib() AudioLibWriteRepository
+	Formats() FormatsWriteRepository
 	Outbox() OutboxRepository
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/example/dddcqrs/internal/domain/audiolib"
+	"github.com/example/dddcqrs/internal/domain/formats"
 	"github.com/example/dddcqrs/internal/domain/pipeline"
 	"github.com/example/dddcqrs/internal/domain/projects"
 	"github.com/example/dddcqrs/internal/domain/shared"
@@ -29,6 +30,13 @@ type ProjectsWriteRepository = projects.WriteRepo
 
 // AudioLibWriteRepository aliases the audiolib write port.
 type AudioLibWriteRepository = audiolib.WriteRepo
+
+// FormatsWriteRepository aliases the formats write port.
+type FormatsWriteRepository interface {
+	Save(ctx context.Context, f *formats.Format) error
+	GetByID(ctx context.Context, id string) (*formats.Format, error)
+	Delete(ctx context.Context, id string) error
+}
 
 // OutboxRepository persists domain events into the transactional outbox table
 // WITHIN the same UoW transaction as the aggregate change. A separate relay

@@ -7,6 +7,7 @@
     "dashboard": "Панель",
     "templates": "Шаблоны",
     "presets": "Пресеты",
+    "formats": "Форматы",
     "audio": "Аудио"
   },
   "common": {
@@ -66,6 +67,7 @@
     "panelDurationMs": "Длительность панели (мс)",
     "transition": "Переход",
     "formatLabel": "Формат",
+    "inheritNoFormat": "наследовать (без формата)",
     "projectOptional": "Проект (необязательно)",
     "standaloneRun": "автономный запуск (без проекта)",
     "overrides": "Параметры",
@@ -351,6 +353,44 @@
     "publish": "опубликовать",
     "runLink": "запуск"
   },
+  "formats": {
+    "title": "Форматы",
+    "subtitle": "Рецепты визуального стиля. Prefix/suffix добавляются к каждому image prompt + render aspect.",
+    "newFormat": "Новый формат",
+    "empty": "Форматов по фильтру нет.",
+    "use": "Использовать",
+    "fork": "Форк →",
+    "noDescription": "Без описания",
+    "injectsPrefix": "Добавляет prefix",
+    "systemViewOnly": "Системный формат (только просмотр — форкните чтобы редактировать)",
+    "confirmDelete": "Удалить формат '{{name}}'? Действие необратимо.",
+    "scope": {
+      "all": "Все",
+      "system": "Системные",
+      "user": "Свои"
+    },
+    "editor": {
+      "newTitle": "Новый формат",
+      "editTitle": "Изменить формат",
+      "forkTitle": "Форк формата",
+      "saveAsFork": "Сохранить как форк",
+      "systemNotice": "Системный формат — только чтение. Форкните для редактируемой копии.",
+      "forkNow": "Форкнуть",
+      "identity": "Идентификация",
+      "descriptionPlaceholder": "Какой вид получится? Для какого контента подходит?",
+      "renderSection": "Render aspect + переходы",
+      "aspect": "Aspect / размер",
+      "imageInfluence": "Влияние на image prompt",
+      "imageInfluenceHint": "Prefix подставляется перед, suffix — после промпта каждой панели для image модели.",
+      "prefix": "Prefix (перед промптом панели)",
+      "suffix": "Suffix (после промпта панели)",
+      "preview": "Предпросмотр итогового промпта",
+      "samplePromptPlaceholder": "введите пример промпта панели чтобы увидеть итог",
+      "composedEmpty": "(пусто)",
+      "scriptInfluence": "Подсказка для script LLM",
+      "scriptInfluenceHint": "Добавляется к system prompt script-шага. Определяет как LLM пишет подписи и описания панелей."
+    }
+  },
   "presets": {
     "title": "Пресеты",
     "subtitle": "Готовые пайплайны. Выберите, подкрутите, отправляйте.",
@@ -359,6 +399,7 @@
     "use": "Использовать",
     "samplePrompts": "Примеры промптов",
     "maxCost": "Лимит стоимости",
+    "noDescription": "Без описания",
     "stepsCount_one": "{{count}} шаг",
     "stepsCount_few": "{{count}} шага",
     "stepsCount_many": "{{count}} шагов",

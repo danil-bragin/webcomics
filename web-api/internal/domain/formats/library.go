@@ -10,6 +10,7 @@ type Format struct {
 	Name               string `json:"name"`
 	Description        string `json:"description"`
 	Scope              string `json:"scope"` // "system" | "user"
+	Icon               string `json:"icon,omitempty"`
 	ScriptSystemSuffix string `json:"script_system_suffix,omitempty"`
 	ImagePromptPrefix  string `json:"image_prompt_prefix,omitempty"`
 	ImagePromptSuffix  string `json:"image_prompt_suffix,omitempty"`

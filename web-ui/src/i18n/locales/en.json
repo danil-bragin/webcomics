@@ -7,6 +7,7 @@
     "dashboard": "Dashboard",
     "templates": "Templates",
     "presets": "Presets",
+    "formats": "Formats",
     "audio": "Audio"
   },
   "common": {
@@ -66,6 +67,7 @@
     "panelDurationMs": "Panel duration (ms)",
     "transition": "Transition",
     "formatLabel": "Format",
+    "inheritNoFormat": "inherit (no format)",
     "projectOptional": "Project (optional)",
     "standaloneRun": "standalone run (no project)",
     "overrides": "Overrides",
@@ -341,6 +343,44 @@
     "publish": "publish",
     "runLink": "run"
   },
+  "formats": {
+    "title": "Formats",
+    "subtitle": "Visual style recipes. Prefix/suffix added to every image prompt + render aspect.",
+    "newFormat": "New format",
+    "empty": "No formats match this filter.",
+    "use": "Use",
+    "fork": "Fork →",
+    "noDescription": "No description",
+    "injectsPrefix": "Injects prefix",
+    "systemViewOnly": "System format (view only — fork to edit)",
+    "confirmDelete": "Delete format '{{name}}'? Cannot be undone.",
+    "scope": {
+      "all": "All",
+      "system": "System",
+      "user": "Custom"
+    },
+    "editor": {
+      "newTitle": "New format",
+      "editTitle": "Edit format",
+      "forkTitle": "Fork format",
+      "saveAsFork": "Save as fork",
+      "systemNotice": "System format — read-only. Fork to create an editable copy.",
+      "forkNow": "Fork now",
+      "identity": "Identity",
+      "descriptionPlaceholder": "What look does this produce? Best for what kind of content?",
+      "renderSection": "Render aspect + transitions",
+      "aspect": "Aspect / size",
+      "imageInfluence": "Image prompt influence",
+      "imageInfluenceHint": "Prefix prepends, suffix appends to every panel prompt sent to the image model.",
+      "prefix": "Prefix (prepended to panel prompt)",
+      "suffix": "Suffix (appended to panel prompt)",
+      "preview": "Composed prompt preview",
+      "samplePromptPlaceholder": "type a sample panel prompt to see composed",
+      "composedEmpty": "(empty)",
+      "scriptInfluence": "Script LLM hint",
+      "scriptInfluenceHint": "Appended to the script-step system prompt. Controls how the LLM writes captions and panel descriptions."
+    }
+  },
   "presets": {
     "title": "Presets",
     "subtitle": "Pre-built pipelines. Pick one, tweak it, ship it.",
@@ -349,6 +389,7 @@
     "use": "Use",
     "samplePrompts": "Sample prompts",
     "maxCost": "Max cost cap",
+    "noDescription": "No description",
     "stepsCount_one": "{{count}} step",
     "stepsCount_other": "{{count}} steps",
     "confirmDelete": "Delete preset '{{name}}'? Existing runs keep their history.",

@@ -13,11 +13,13 @@ import (
 	"github.com/example/dddcqrs/internal/app/bus"
 	"github.com/example/dddcqrs/internal/app/command"
 	audiocmd "github.com/example/dddcqrs/internal/app/command/audiolib"
+	formatcmd "github.com/example/dddcqrs/internal/app/command/formats"
 	pipecmd "github.com/example/dddcqrs/internal/app/command/pipeline"
 	projcmd "github.com/example/dddcqrs/internal/app/command/projects"
 	appmw "github.com/example/dddcqrs/internal/app/middleware"
 	"github.com/example/dddcqrs/internal/app/query"
 	audioq "github.com/example/dddcqrs/internal/app/query/audiolib"
+	formatq "github.com/example/dddcqrs/internal/app/query/formats"
 	pipeq "github.com/example/dddcqrs/internal/app/query/pipeline"
 	projq "github.com/example/dddcqrs/internal/app/query/projects"
 	"github.com/example/dddcqrs/internal/infrastructure/audiosource"
@@ -73,6 +75,12 @@ func Build(cfg *config.Config) *do.RootScope {
 	do.Provide(i, func(inj do.Injector) (audioq.ReadModel, error) {
 		rp := do.MustInvoke[*postgres.ReadPool](inj)
 		return read.NewAudioLibModel(rp.Pool), nil
+	})
+
+	// Formats read model on the READ pool.
+	do.Provide(i, func(inj do.Injector) (formatq.ReadModel, error) {
+		rp := do.MustInvoke[*postgres.ReadPool](inj)
+		return read.NewFormatsModel(rp.Pool), nil
 	})
 
 	// URL fetcher + Pixabay scraper for the audio library.
@@ -166,6 +174,13 @@ func Build(cfg *config.Config) *do.RootScope {
 		store := do.MustInvoke[*minio.Store](inj)
 		fetcher := do.MustInvoke[audiocmd.URLFetcher](inj)
 		pixabay := do.MustInvoke[audiocmd.PixabaySearcher](inj)
+		// Formats marketplace.
+		fmm := do.MustInvoke[formatq.ReadModel](inj)
+		formatcmd.SaveFormatOnBus(reg, m)
+		formatcmd.DeleteFormatOnBus(reg, m)
+		formatq.ListFormatsOnBus(reg, fmm)
+		formatq.GetFormatOnBus(reg, fmm)
+
 		audiocmd.UploadTrackOnBus(reg, m, store)
 		audiocmd.ImportFromURLOnBus(reg, m, store, fetcher)
 		audiocmd.ImportFromPixabayOnBus(reg, m, store, pixabay)

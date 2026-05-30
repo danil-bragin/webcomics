@@ -212,26 +212,21 @@ export function Studio() {
           <CardTitle>{tt("studio.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <label className="text-sm text-muted-foreground mb-1 block">{tt("studio.formatLabel")}</label>
-            <select
-              value={formatId}
-              onChange={(e) => setFormatId(e.target.value)}
-              className="h-9 w-full rounded-md border border-border bg-secondary/30 px-3 text-sm"
-            >
-              <option value="">— inherit (no format)  —</option>
-              {formatsQ.data?.map((f) => (
-                <option key={f.id} value={f.id}>{f.name}</option>
-              ))}
-            </select>
-            {formatId && formatsQ.data ? (
-              <p className="text-xs text-muted-foreground mt-1">
-                {formatsQ.data.find((f) => f.id === formatId)?.description}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+          {/* Format / Project / Language — three top-level pickers on one row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">{tt("studio.formatLabel")}</label>
+              <select
+                value={formatId}
+                onChange={(e) => setFormatId(e.target.value)}
+                className="h-9 w-full rounded-md border border-border bg-secondary/30 px-3 text-sm"
+              >
+                <option value="">— {tt("studio.inheritNoFormat")} —</option>
+                {formatsQ.data?.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="text-sm text-muted-foreground mb-1 block">{tt("studio.projectOptional")}</label>
               <select
@@ -246,10 +241,7 @@ export function Studio() {
               </select>
             </div>
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">
-                {tt("studio.languageLabel")}
-                <span className="ml-1 text-[10px] opacity-60">{tt("studio.languageHint")}</span>
-              </label>
+              <label className="text-sm text-muted-foreground mb-1 block">{tt("studio.languageLabel")}</label>
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as "en" | "ru" | "fr")}
@@ -261,6 +253,12 @@ export function Studio() {
               </select>
             </div>
           </div>
+          {formatId && formatsQ.data ? (
+            <p className="text-xs text-muted-foreground -mt-2">
+              {formatsQ.data.find((f) => f.id === formatId)?.description}
+            </p>
+          ) : null}
+          <p className="text-[10px] text-muted-foreground -mt-2 opacity-70">{tt("studio.languageHint")}</p>
 
           {projectId && projectDetail.data ? (
             <div className="rounded border border-border bg-secondary/10 p-3 space-y-2 text-xs">
