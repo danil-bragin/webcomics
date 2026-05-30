@@ -590,7 +590,7 @@ func (r *Run) findStepIndex(t StepType) int {
 }
 
 // RecordScriptCompleted closes the active attempt of step idx.
-func (r *Run) RecordScriptCompleted(stepIdx int, scriptKey string, panels []PanelDef, cost CostInfo, _ int) error {
+func (r *Run) RecordScriptCompleted(stepIdx int, scriptKey string, panels []PanelDef, cost CostInfo, _ int, bytes int64) error {
 	step, attempt, err := r.openAttempt(stepIdx, StepScript)
 	if err != nil {
 		return err
@@ -618,7 +618,7 @@ func (r *Run) RecordScriptCompleted(stepIdx int, scriptKey string, panels []Pane
 	r.appendCost(step.id, attempt.id, cost, now)
 	if scriptKey != "" {
 		r.newAssets = append(r.newAssets, NewAsset(
-			r.id, step.id, attempt.id, AssetScriptJSON, "", scriptKey, "application/json", 0,
+			r.id, step.id, attempt.id, AssetScriptJSON, "", scriptKey, "application/json", bytes,
 		))
 	}
 	return r.advance(stepIdx)
@@ -731,7 +731,7 @@ func (r *Run) RecordImageCompleted(stepIdx, panelIdx int, objectKey string, cost
 }
 
 // RecordAssembleCompleted finishes the assemble step's active attempt.
-func (r *Run) RecordAssembleCompleted(stepIdx int, objectKey string, cost CostInfo, _ int) error {
+func (r *Run) RecordAssembleCompleted(stepIdx int, objectKey string, cost CostInfo, _ int, bytes int64) error {
 	step, attempt, err := r.openAttempt(stepIdx, StepAssemble)
 	if err != nil {
 		return err
@@ -739,12 +739,12 @@ func (r *Run) RecordAssembleCompleted(stepIdx int, objectKey string, cost CostIn
 	if attempt.status == AttemptCompleted {
 		return nil
 	}
-	r.closeAttempt(step, attempt, objectKey, AssetVideo, "video/mp4", cost)
+	r.closeAttempt(step, attempt, objectKey, AssetVideo, "video/mp4", cost, bytes)
 	return r.advance(stepIdx)
 }
 
 // RecordAudioCompleted finishes the audio step's active attempt.
-func (r *Run) RecordAudioCompleted(stepIdx int, objectKey string, cost CostInfo, _ int) error {
+func (r *Run) RecordAudioCompleted(stepIdx int, objectKey string, cost CostInfo, _ int, bytes int64) error {
 	step, attempt, err := r.openAttempt(stepIdx, StepAudio)
 	if err != nil {
 		return err
@@ -752,12 +752,12 @@ func (r *Run) RecordAudioCompleted(stepIdx int, objectKey string, cost CostInfo,
 	if attempt.status == AttemptCompleted {
 		return nil
 	}
-	r.closeAttempt(step, attempt, objectKey, AssetAudio, "audio/mpeg", cost)
+	r.closeAttempt(step, attempt, objectKey, AssetAudio, "audio/mpeg", cost, bytes)
 	return r.advance(stepIdx)
 }
 
 // RecordMusicCompleted finishes the music step's active attempt.
-func (r *Run) RecordMusicCompleted(stepIdx int, objectKey string, cost CostInfo, _ int) error {
+func (r *Run) RecordMusicCompleted(stepIdx int, objectKey string, cost CostInfo, _ int, bytes int64) error {
 	step, attempt, err := r.openAttempt(stepIdx, StepMusic)
 	if err != nil {
 		return err
@@ -765,7 +765,7 @@ func (r *Run) RecordMusicCompleted(stepIdx int, objectKey string, cost CostInfo,
 	if attempt.status == AttemptCompleted {
 		return nil
 	}
-	r.closeAttempt(step, attempt, objectKey, AssetMusic, "audio/mpeg", cost)
+	r.closeAttempt(step, attempt, objectKey, AssetMusic, "audio/mpeg", cost, bytes)
 	return r.advance(stepIdx)
 }
 
@@ -922,7 +922,7 @@ func (r *Run) openAttempt(stepIdx int, expected StepType) (*Step, *StepAttempt, 
 
 // closeAttempt marks an attempt completed with a single-output payload and
 // records the asset + cost. Shared by assemble / audio / music.
-func (r *Run) closeAttempt(step *Step, attempt *StepAttempt, objectKey string, kind AssetKind, mime string, cost CostInfo) {
+func (r *Run) closeAttempt(step *Step, attempt *StepAttempt, objectKey string, kind AssetKind, mime string, cost CostInfo, bytes int64) {
 	now := time.Now().UTC()
 	outJSON, _ := json.Marshal([]map[string]any{{"object_key": objectKey}})
 	attempt.outputs = outJSON
@@ -940,7 +940,7 @@ func (r *Run) closeAttempt(step *Step, attempt *StepAttempt, objectKey string, k
 	r.appendCost(step.id, attempt.id, cost, now)
 	if objectKey != "" {
 		r.newAssets = append(r.newAssets, NewAsset(
-			r.id, step.id, attempt.id, kind, "", objectKey, mime, 0,
+			r.id, step.id, attempt.id, kind, "", objectKey, mime, bytes,
 		))
 	}
 }

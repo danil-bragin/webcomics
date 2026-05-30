@@ -95,6 +95,7 @@ class AudioHandler:
             "step_index": step_index,
             "object_key": output_key,
             "bucket": self.store.bucket,
+            "bytes": len(data),
             "cost": cost,
             "duration_ms": duration_ms,
         })

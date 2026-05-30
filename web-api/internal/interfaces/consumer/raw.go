@@ -122,7 +122,7 @@ func (c *RawCompletionConsumer) handleScript(ctx context.Context, body []byte) e
 	}
 	_, err := bus.Dispatch[pipecmd.RecordStepResult](ctx, c.reg, pipecmd.RecordScriptCompleted{
 		RunID: p.RunID, StepIndex: p.StepIndex,
-		ScriptKey: p.ScriptKey, Bucket: p.Bucket, Panels: p.Panels,
+		ScriptKey: p.ScriptKey, Bucket: p.Bucket, Bytes: p.Bytes, Panels: p.Panels,
 		Cost: p.Cost, DurationMs: p.DurationMs,
 	})
 	return err
@@ -171,7 +171,7 @@ func (c *RawCompletionConsumer) handleAudio(ctx context.Context, body []byte) er
 	}
 	_, err := bus.Dispatch[pipecmd.RecordStepResult](ctx, c.reg, pipecmd.RecordAudioCompleted{
 		RunID: p.RunID, StepIndex: p.StepIndex,
-		ObjectKey: p.ObjectKey, Bucket: p.Bucket, Cost: p.Cost, DurationMs: p.DurationMs,
+		ObjectKey: p.ObjectKey, Bucket: p.Bucket, Bytes: p.Bytes, Cost: p.Cost, DurationMs: p.DurationMs,
 	})
 	return err
 }
@@ -195,7 +195,7 @@ func (c *RawCompletionConsumer) handleAssemble(ctx context.Context, body []byte)
 	}
 	_, err := bus.Dispatch[pipecmd.RecordStepResult](ctx, c.reg, pipecmd.RecordAssembleCompleted{
 		RunID: p.RunID, StepIndex: p.StepIndex,
-		ObjectKey: p.ObjectKey, Bucket: p.Bucket, Cost: p.Cost, DurationMs: p.DurationMs,
+		ObjectKey: p.ObjectKey, Bucket: p.Bucket, Bytes: p.Bytes, Cost: p.Cost, DurationMs: p.DurationMs,
 	})
 	return err
 }

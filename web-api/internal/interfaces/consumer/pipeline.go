@@ -247,7 +247,7 @@ func (c *Consumer) onScriptCompleted(msg *message.Message) error {
 	}
 	_, err := bus.Dispatch[pipecmd.RecordStepResult](msg.Context(), c.reg, pipecmd.RecordScriptCompleted{
 		RunID: p.RunID, StepIndex: p.StepIndex,
-		ScriptKey: p.ScriptKey, Bucket: p.Bucket, Panels: p.Panels,
+		ScriptKey: p.ScriptKey, Bucket: p.Bucket, Bytes: p.Bytes, Panels: p.Panels,
 		Cost: p.Cost, DurationMs: p.DurationMs,
 	})
 	return err
@@ -274,7 +274,7 @@ func (c *Consumer) onAudioCompleted(msg *message.Message) error {
 	}
 	_, err := bus.Dispatch[pipecmd.RecordStepResult](msg.Context(), c.reg, pipecmd.RecordAudioCompleted{
 		RunID: p.RunID, StepIndex: p.StepIndex,
-		ObjectKey: p.ObjectKey, Bucket: p.Bucket,
+		ObjectKey: p.ObjectKey, Bucket: p.Bucket, Bytes: p.Bytes,
 		Cost: p.Cost, DurationMs: p.DurationMs,
 	})
 	return err
@@ -313,7 +313,7 @@ func (c *Consumer) onAssembleCompleted(msg *message.Message) error {
 	}
 	_, err := bus.Dispatch[pipecmd.RecordStepResult](msg.Context(), c.reg, pipecmd.RecordAssembleCompleted{
 		RunID: p.RunID, StepIndex: p.StepIndex,
-		ObjectKey: p.ObjectKey, Bucket: p.Bucket,
+		ObjectKey: p.ObjectKey, Bucket: p.Bucket, Bytes: p.Bytes,
 		Cost: p.Cost, DurationMs: p.DurationMs,
 	})
 	return err

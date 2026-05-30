@@ -35,7 +35,7 @@ func driveToCaption(t *testing.T, run *Run) {
 	if err := run.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if err := run.RecordScriptCompleted(0, "k.json", panelsOf(2), CostInfo{TotalCostUSD: 0.001}, 50); err != nil {
+	if err := run.RecordScriptCompleted(0, "k.json", panelsOf(2), CostInfo{TotalCostUSD: 0.001}, 50, 0); err != nil {
 		t.Fatalf("script: %v", err)
 	}
 	for i := range 2 {
@@ -44,7 +44,7 @@ func driveToCaption(t *testing.T, run *Run) {
 			t.Fatalf("image %d: %v", i, err)
 		}
 	}
-	if err := run.RecordAssembleCompleted(2, "runs/x/2/video.mp4", CostInfo{}, 100); err != nil {
+	if err := run.RecordAssembleCompleted(2, "runs/x/2/video.mp4", CostInfo{}, 100, 0); err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
 }

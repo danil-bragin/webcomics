@@ -22,7 +22,7 @@ func newRunAt(t *testing.T, panels int, autoAssemble bool) *Run {
 
 func completeScript(t *testing.T, run *Run, panels []PanelDef) {
 	t.Helper()
-	if err := run.RecordScriptCompleted(0, "runs/x/0/script.json", panels, CostInfo{TotalCostUSD: 0.001}, 100); err != nil {
+	if err := run.RecordScriptCompleted(0, "runs/x/0/script.json", panels, CostInfo{TotalCostUSD: 0.001}, 100, 0); err != nil {
 		t.Fatalf("RecordScriptCompleted: %v", err)
 	}
 }
@@ -170,7 +170,7 @@ func TestRun_RegeneratedStepCompletion_ParksRunInAwaitingAction(t *testing.T) {
 	completeScript(t, run, panelsOf(2))
 	completeImagePanels(t, run, 1, 2)
 	// Drain assemble too so cascade settles.
-	_ = run.RecordAssembleCompleted(2, "runs/x/2/video.mp4", CostInfo{TotalCostUSD: 0}, 100)
+	_ = run.RecordAssembleCompleted(2, "runs/x/2/video.mp4", CostInfo{TotalCostUSD: 0}, 100, 0)
 	if run.Status() != RunStatusCompleted {
 		t.Fatalf("setup: expected completed, got %s", run.Status())
 	}
@@ -179,7 +179,7 @@ func TestRun_RegeneratedStepCompletion_ParksRunInAwaitingAction(t *testing.T) {
 		t.Fatalf("RegenerateStep: %v", err)
 	}
 	// Complete the new script attempt.
-	if err := run.RecordScriptCompleted(0, "runs/x/0/script2.json", panelsOf(2), CostInfo{TotalCostUSD: 0.001}, 100); err != nil {
+	if err := run.RecordScriptCompleted(0, "runs/x/0/script2.json", panelsOf(2), CostInfo{TotalCostUSD: 0.001}, 100, 0); err != nil {
 		t.Fatalf("RecordScriptCompleted v2: %v", err)
 	}
 	// Per manual-cascade policy: downstream is stale + run should pause.

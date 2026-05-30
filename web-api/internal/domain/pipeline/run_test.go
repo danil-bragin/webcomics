@@ -96,7 +96,7 @@ func TestRecordScriptCompleted_AdvancesAndFansOut(t *testing.T) {
 		{Index: 2, Prompt: "p3"},
 	}
 	cost := CostInfo{Provider: "openrouter", Model: "x", Units: 100, UnitLabel: "tokens", UnitCostUSD: 0.0001, TotalCostUSD: 0.01}
-	if err := run.RecordScriptCompleted(0, "runs/x/0/script.json", panels, cost, 50); err != nil {
+	if err := run.RecordScriptCompleted(0, "runs/x/0/script.json", panels, cost, 50, 0); err != nil {
 		t.Fatalf("RecordScriptCompleted: %v", err)
 	}
 	if got := run.Steps()[0].Status(); got != StepCompleted {
@@ -133,7 +133,7 @@ func TestRecordImageCompleted_FanInAndAdvance(t *testing.T) {
 
 	panels := []PanelDef{{Index: 0, Prompt: "a"}, {Index: 1, Prompt: "b"}, {Index: 2, Prompt: "c"}}
 	cost := CostInfo{Provider: "or", Units: 1, UnitLabel: "tokens", TotalCostUSD: 0.001}
-	_ = run.RecordScriptCompleted(0, "k", panels, cost, 10)
+	_ = run.RecordScriptCompleted(0, "k", panels, cost, 10, 0)
 	_ = run.PullEvents()
 	run.ResetSideEffects()
 
@@ -184,7 +184,7 @@ func TestRecordImageCompleted_IdempotentSamePanelKey(t *testing.T) {
 	run, _ := NewRun("x", tpl)
 	_ = run.Start()
 	_ = run.PullEvents()
-	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "a"}, {Index: 1, Prompt: "b"}}, CostInfo{}, 0)
+	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "a"}, {Index: 1, Prompt: "b"}}, CostInfo{}, 0, 0)
 	_ = run.PullEvents()
 
 	imgCost := CostInfo{Provider: "fal", TotalCostUSD: 0.003}
@@ -201,12 +201,12 @@ func TestRecordAssembleCompleted_FinalizesRun(t *testing.T) {
 	run, _ := NewRun("x", tpl)
 	_ = run.Start()
 	_ = run.PullEvents()
-	_ = run.RecordScriptCompleted(0, "s", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or", TotalCostUSD: 0.001}, 0)
+	_ = run.RecordScriptCompleted(0, "s", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or", TotalCostUSD: 0.001}, 0, 0)
 	_ = run.PullEvents()
 	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0, 0)
 	_ = run.PullEvents()
 
-	if err := run.RecordAssembleCompleted(2, "runs/x/2/video.mp4", CostInfo{Provider: "local"}, 200); err != nil {
+	if err := run.RecordAssembleCompleted(2, "runs/x/2/video.mp4", CostInfo{Provider: "local"}, 200, 0); err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
 	if got := run.Status(); got != RunStatusCompleted {
@@ -269,11 +269,11 @@ func TestCancel_RejectsTerminal(t *testing.T) {
 	run, _ := NewRun("x", tpl)
 	_ = run.Start()
 	_ = run.PullEvents()
-	_ = run.RecordScriptCompleted(0, "s", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{}, 0)
+	_ = run.RecordScriptCompleted(0, "s", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{}, 0, 0)
 	_ = run.PullEvents()
 	_ = run.RecordImageCompleted(1, 0, "k", CostInfo{}, 0, 0)
 	_ = run.PullEvents()
-	_ = run.RecordAssembleCompleted(2, "v", CostInfo{}, 0)
+	_ = run.RecordAssembleCompleted(2, "v", CostInfo{}, 0, 0)
 	if err := run.Cancel(); err == nil {
 		t.Fatalf("expected error cancelling a completed run")
 	}
@@ -283,7 +283,7 @@ func TestRecordScriptCompleted_RejectsWrongStep(t *testing.T) {
 	tpl := newTestTemplate(t, 1)
 	run, _ := NewRun("x", tpl)
 	_ = run.Start()
-	if err := run.RecordScriptCompleted(2, "k", []PanelDef{{Prompt: "p"}}, CostInfo{}, 0); err != ErrStepTypeMismatch {
+	if err := run.RecordScriptCompleted(2, "k", []PanelDef{{Prompt: "p"}}, CostInfo{}, 0, 0); err != ErrStepTypeMismatch {
 		t.Fatalf("want ErrStepTypeMismatch, got %v", err)
 	}
 }
@@ -292,7 +292,7 @@ func TestRecordImageCompleted_RejectsUnknownPanel(t *testing.T) {
 	tpl := newTestTemplate(t, 1)
 	run, _ := NewRun("x", tpl)
 	_ = run.Start()
-	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{}, 0)
+	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{}, 0, 0)
 	if err := run.RecordImageCompleted(1, 42, "x", CostInfo{}, 0, 0); err != ErrUnknownPanel {
 		t.Fatalf("want ErrUnknownPanel, got %v", err)
 	}
@@ -317,7 +317,7 @@ func TestExtensibility_ScriptImageAudioAssemble(t *testing.T) {
 	_ = run.PullEvents()
 
 	// script
-	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p", Caption: "hi"}}, CostInfo{Provider: "or", TotalCostUSD: 0.001}, 0)
+	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p", Caption: "hi"}}, CostInfo{Provider: "or", TotalCostUSD: 0.001}, 0, 0)
 	if got := pullEventNames(run.PullEvents()); len(got) != 1 || got[0] != "pipeline.image.requested" {
 		t.Fatalf("after script want image.requested, got %v", got)
 	}
@@ -330,7 +330,7 @@ func TestExtensibility_ScriptImageAudioAssemble(t *testing.T) {
 	}
 
 	// audio
-	_ = run.RecordAudioCompleted(2, "runs/x/2/audio.mp3", CostInfo{Provider: "fal", Model: "tts", TotalCostUSD: 0.003}, 0)
+	_ = run.RecordAudioCompleted(2, "runs/x/2/audio.mp3", CostInfo{Provider: "fal", Model: "tts", TotalCostUSD: 0.003}, 0, 0)
 	got = pullEventNames(run.PullEvents())
 	if len(got) != 1 || got[0] != "pipeline.assemble.requested" {
 		t.Fatalf("after audio want assemble.requested, got %v", got)
@@ -342,7 +342,7 @@ func TestExtensibility_ScriptImageAudioAssemble(t *testing.T) {
 	}
 
 	// assemble
-	_ = run.RecordAssembleCompleted(3, "vid", CostInfo{Provider: "local"}, 0)
+	_ = run.RecordAssembleCompleted(3, "vid", CostInfo{Provider: "local"}, 0, 0)
 	if run.Status() != RunStatusCompleted {
 		t.Fatalf("run not completed: %s", run.Status())
 	}
@@ -380,7 +380,7 @@ func TestRecordAudioCompleted_Standalone(t *testing.T) {
 	run, _ := NewRun("x", tpl)
 	_ = run.Start()
 	_ = run.PullEvents()
-	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p", Caption: "c"}}, CostInfo{Provider: "or"}, 0)
+	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p", Caption: "c"}}, CostInfo{Provider: "or"}, 0, 0)
 	_ = run.PullEvents()
 	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal"}, 0, 0)
 	_ = run.PullEvents()
@@ -390,7 +390,7 @@ func TestRecordAudioCompleted_Standalone(t *testing.T) {
 		t.Fatalf("audio step status: %s", got)
 	}
 
-	if err := run.RecordAudioCompleted(2, "runs/x/2/audio.mp3", CostInfo{Provider: "fal", Model: "tts", TotalCostUSD: 0.001}, 250); err != nil {
+	if err := run.RecordAudioCompleted(2, "runs/x/2/audio.mp3", CostInfo{Provider: "fal", Model: "tts", TotalCostUSD: 0.001}, 250, 0); err != nil {
 		t.Fatalf("RecordAudioCompleted: %v", err)
 	}
 	if got := run.Steps()[2].Status(); got != StepCompleted {
@@ -416,14 +416,14 @@ func TestUploadStep_PassesAssembleVideoKey(t *testing.T) {
 	run, _ := NewRun("x", tpl)
 	_ = run.Start()
 	_ = run.PullEvents()
-	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or"}, 0)
+	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or"}, 0, 0)
 	_ = run.PullEvents()
 	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal"}, 0, 0)
 	_ = run.PullEvents()
 
 	// After assemble completes, upload step is requested with the video key.
 	const videoKey = "runs/x/2/video.mp4"
-	if err := run.RecordAssembleCompleted(2, videoKey, CostInfo{Provider: "local"}, 0); err != nil {
+	if err := run.RecordAssembleCompleted(2, videoKey, CostInfo{Provider: "local"}, 0, 0); err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
 	got := pullEventNames(run.PullEvents())
@@ -461,7 +461,7 @@ func TestMusicStep_PassesMusicKeyToAssemble(t *testing.T) {
 	run, _ := NewRun("a vibey cat", tpl)
 	_ = run.Start()
 	_ = run.PullEvents()
-	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or"}, 0)
+	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or"}, 0, 0)
 	_ = run.PullEvents()
 	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal"}, 0, 0)
 	got := pullEventNames(run.PullEvents())
@@ -470,7 +470,7 @@ func TestMusicStep_PassesMusicKeyToAssemble(t *testing.T) {
 	}
 
 	const musicKey = "runs/x/2/music.mp3"
-	if err := run.RecordMusicCompleted(2, musicKey, CostInfo{Provider: "stable", TotalCostUSD: 0.05}, 0); err != nil {
+	if err := run.RecordMusicCompleted(2, musicKey, CostInfo{Provider: "stable", TotalCostUSD: 0.05}, 0, 0); err != nil {
 		t.Fatalf("music: %v", err)
 	}
 	got = pullEventNames(run.PullEvents())
@@ -496,7 +496,7 @@ func TestUploadStep_FailsIfNoAssembleBefore(t *testing.T) {
 	run, _ := NewRun("x", tpl)
 	_ = run.Start()
 	_ = run.PullEvents()
-	err = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or"}, 0)
+	err = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or"}, 0, 0)
 	if err == nil {
 		t.Fatalf("expected error advancing into upload step without an assemble in front")
 	}
@@ -520,7 +520,7 @@ func TestCostCap_FailsRunWhenExceeded(t *testing.T) {
 	_ = run.PullEvents()
 
 	panels := []PanelDef{{Index: 0, Prompt: "a"}, {Index: 1, Prompt: "b"}, {Index: 2, Prompt: "c"}}
-	_ = run.RecordScriptCompleted(0, "k", panels, CostInfo{Provider: "or", TotalCostUSD: 0.001}, 0)
+	_ = run.RecordScriptCompleted(0, "k", panels, CostInfo{Provider: "or", TotalCostUSD: 0.001}, 0, 0)
 	_ = run.PullEvents()
 	// First panel: under cap.
 	_ = run.RecordImageCompleted(1, 0, "k0", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0, 0)

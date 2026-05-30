@@ -15,6 +15,7 @@ type RecordScriptCompleted struct {
 	StepIndex  int
 	ScriptKey  string
 	Bucket     string
+	Bytes      int64
 	Panels     []pipeline.PanelDef
 	Cost       pipeline.CostInfo
 	DurationMs int
@@ -41,7 +42,7 @@ func (h *RecordScriptCompletedHandler) Handle(ctx context.Context, cmd RecordScr
 		if err != nil {
 			return err
 		}
-		if err := run.RecordScriptCompleted(cmd.StepIndex, cmd.ScriptKey, cmd.Panels, cmd.Cost, cmd.DurationMs); err != nil {
+		if err := run.RecordScriptCompleted(cmd.StepIndex, cmd.ScriptKey, cmd.Panels, cmd.Cost, cmd.DurationMs, cmd.Bytes); err != nil {
 			return err
 		}
 		run.FillEmptyBucketsOnNewAssets(cmd.Bucket)
@@ -100,6 +101,7 @@ type RecordAudioCompleted struct {
 	StepIndex  int
 	ObjectKey  string
 	Bucket     string
+	Bytes      int64
 	Cost       pipeline.CostInfo
 	DurationMs int
 }
@@ -123,7 +125,7 @@ func (h *RecordAudioCompletedHandler) Handle(ctx context.Context, cmd RecordAudi
 		if err != nil {
 			return err
 		}
-		if err := run.RecordAudioCompleted(cmd.StepIndex, cmd.ObjectKey, cmd.Cost, cmd.DurationMs); err != nil {
+		if err := run.RecordAudioCompleted(cmd.StepIndex, cmd.ObjectKey, cmd.Cost, cmd.DurationMs, cmd.Bytes); err != nil {
 			return err
 		}
 		run.FillEmptyBucketsOnNewAssets(cmd.Bucket)
@@ -140,6 +142,7 @@ type RecordMusicCompleted struct {
 	StepIndex  int
 	ObjectKey  string
 	Bucket     string
+	Bytes      int64
 	Cost       pipeline.CostInfo
 	DurationMs int
 }
@@ -163,7 +166,7 @@ func (h *RecordMusicCompletedHandler) Handle(ctx context.Context, cmd RecordMusi
 		if err != nil {
 			return err
 		}
-		if err := run.RecordMusicCompleted(cmd.StepIndex, cmd.ObjectKey, cmd.Cost, cmd.DurationMs); err != nil {
+		if err := run.RecordMusicCompleted(cmd.StepIndex, cmd.ObjectKey, cmd.Cost, cmd.DurationMs, cmd.Bytes); err != nil {
 			return err
 		}
 		run.FillEmptyBucketsOnNewAssets(cmd.Bucket)
@@ -218,6 +221,7 @@ type RecordAssembleCompleted struct {
 	StepIndex  int
 	ObjectKey  string
 	Bucket     string
+	Bytes      int64
 	Cost       pipeline.CostInfo
 	DurationMs int
 }
@@ -242,7 +246,7 @@ func (h *RecordAssembleCompletedHandler) Handle(ctx context.Context, cmd RecordA
 		if err != nil {
 			return err
 		}
-		if err := run.RecordAssembleCompleted(cmd.StepIndex, cmd.ObjectKey, cmd.Cost, cmd.DurationMs); err != nil {
+		if err := run.RecordAssembleCompleted(cmd.StepIndex, cmd.ObjectKey, cmd.Cost, cmd.DurationMs, cmd.Bytes); err != nil {
 			return err
 		}
 		run.FillEmptyBucketsOnNewAssets(cmd.Bucket)

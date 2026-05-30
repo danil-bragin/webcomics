@@ -283,6 +283,7 @@ type ScriptCompletedPayload struct {
 	StepIndex  int        `json:"step_index"`
 	ScriptKey  string     `json:"script_key"`
 	Bucket     string     `json:"bucket,omitempty"`
+	Bytes      int64      `json:"bytes,omitempty"`
 	Panels     []PanelDef `json:"panels"`
 	Cost       CostInfo   `json:"cost"`
 	DurationMs int        `json:"duration_ms"`
@@ -304,6 +305,7 @@ type AudioCompletedPayload struct {
 	StepIndex  int      `json:"step_index"`
 	ObjectKey  string   `json:"object_key"`
 	Bucket     string   `json:"bucket,omitempty"`
+	Bytes      int64    `json:"bytes,omitempty"`
 	Cost       CostInfo `json:"cost"`
 	DurationMs int      `json:"duration_ms"`
 }
@@ -313,6 +315,7 @@ type AssembleCompletedPayload struct {
 	StepIndex  int      `json:"step_index"`
 	ObjectKey  string   `json:"object_key"`
 	Bucket     string   `json:"bucket,omitempty"`
+	Bytes      int64    `json:"bytes,omitempty"`
 	Cost       CostInfo `json:"cost"`
 	DurationMs int      `json:"duration_ms"`
 }

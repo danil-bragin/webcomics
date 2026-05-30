@@ -105,6 +105,7 @@ async function main() {
         step_index: input.stepIndex,
         object_key: result.outputKey,
         bucket: store.bucket,
+        bytes: result.bytes,
         cost: {
           provider: "local",
           model: "remotion",

@@ -183,11 +183,8 @@ class ScriptHandler:
             return
 
         script_key = f"runs/{run_id}/{step_index}/script.json"
-        self.store.put_bytes(
-            script_key,
-            json.dumps({"panels": panels, "raw": parsed}).encode(),
-            "application/json",
-        )
+        script_payload = json.dumps({"panels": panels, "raw": parsed}).encode()
+        self.store.put_bytes(script_key, script_payload, "application/json")
 
         cost_total = usage.get("cost_usd")
         total_tokens = usage.get("total_tokens", 0)
@@ -211,6 +208,7 @@ class ScriptHandler:
             "step_index": step_index,
             "script_key": script_key,
             "bucket": self.store.bucket,
+            "bytes": len(script_payload),
             "panels": panels,
             "cost": cost_info,
             "duration_ms": duration_ms,
