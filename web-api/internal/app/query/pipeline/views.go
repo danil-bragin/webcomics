@@ -126,12 +126,19 @@ type RunSummary struct {
 }
 
 type TemplateView struct {
-	ID         string          `json:"id"`
-	Name       string          `json:"name"`
-	Steps      json.RawMessage `json:"steps"`
-	MaxCostUSD float64         `json:"max_cost_usd"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Description   string          `json:"description,omitempty"`
+	Category      string          `json:"category,omitempty"`
+	Icon          string          `json:"icon,omitempty"`
+	Steps         json.RawMessage `json:"steps"`
+	SamplePrompts []string        `json:"sample_prompts,omitempty"`
+	FormatID      string          `json:"format_id,omitempty"`
+	Defaults      json.RawMessage `json:"defaults,omitempty"`
+	MaxCostUSD    float64         `json:"max_cost_usd"`
+	IsTest        bool            `json:"is_test,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
 type AssetRef struct {

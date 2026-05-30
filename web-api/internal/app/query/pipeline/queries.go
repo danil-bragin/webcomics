@@ -78,7 +78,16 @@ func GetTemplateOnBus(r *bus.Registry, rm ReadModel) {
 
 // --- ListTemplates ---
 
-type ListTemplates struct{}
+// TemplateFilter narrows the marketplace listing by category and whether to
+// include test-fixture rows (hidden from the UI by default).
+type TemplateFilter struct {
+	Category    string
+	IncludeTest bool
+}
+
+type ListTemplates struct {
+	Filter TemplateFilter
+}
 
 func (ListTemplates) IsQuery() {}
 
@@ -87,8 +96,12 @@ type ListTemplatesHandler struct{ rm ReadModel }
 func NewListTemplatesHandler(rm ReadModel) *ListTemplatesHandler {
 	return &ListTemplatesHandler{rm: rm}
 }
-func (h *ListTemplatesHandler) Handle(ctx context.Context, _ ListTemplates) ([]TemplateView, error) {
-	return h.rm.ListTemplates(ctx)
+func (h *ListTemplatesHandler) Handle(ctx context.Context, q ListTemplates) ([]TemplateView, error) {
+	if (q.Filter == TemplateFilter{}) {
+		// Default: exclude test fixtures from the marketplace.
+		return h.rm.ListTemplatesFiltered(ctx, TemplateFilter{IncludeTest: false})
+	}
+	return h.rm.ListTemplatesFiltered(ctx, q.Filter)
 }
 func ListTemplatesOnBus(r *bus.Registry, rm ReadModel) {
 	bus.RegisterQuery[ListTemplates, []TemplateView](r, NewListTemplatesHandler(rm))

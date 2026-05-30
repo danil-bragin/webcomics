@@ -53,6 +53,12 @@ func wipe(t *testing.T, pool *pgxpool.Pool) {
 	if _, err := pool.Exec(context.Background(), sql); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	// Also collect old test-fixture templates so they don't accumulate across
+	// runs and pollute the Studio dropdown. is_test=true rows are hidden from
+	// the marketplace anyway, but cleanup keeps the table small.
+	if _, err := pool.Exec(context.Background(), `DELETE FROM pipeline_templates WHERE is_test = TRUE`); err != nil {
+		t.Fatalf("delete test templates: %v", err)
+	}
 }
 
 func ensureTemplate(t *testing.T, mgr uow.Manager) pipeline.TemplateID {
@@ -66,6 +72,7 @@ func ensureTemplate(t *testing.T, mgr uow.Manager) pipeline.TemplateID {
 	if err != nil {
 		t.Fatalf("NewTemplate: %v", err)
 	}
+	tpl.SetIsTest(true) // hidden from marketplace + cleaned on next wipe()
 	if err := mgr.WithinTx(context.Background(), func(ctx context.Context, u uow.UnitOfWork) error {
 		return u.Repositories().PipelineTemplates().Save(ctx, tpl)
 	}); err != nil {

@@ -6,6 +6,7 @@
     "projects": "Projects",
     "dashboard": "Dashboard",
     "templates": "Templates",
+    "presets": "Presets",
     "audio": "Audio"
   },
   "common": {
@@ -96,6 +97,9 @@
     "noEnvironmentsYet": "No environments yet.",
     "includePlot": "Include plot",
     "pickTemplate": "pick a template",
+    "openPresetsPage": "manage all presets →",
+    "changePreset": "change preset",
+    "clickToUse": "click to use",
     "stepsCount_one": "{{count}} step",
     "stepsCount_other": "{{count}} steps"
   },
@@ -336,6 +340,43 @@
     "noTitle": "no title",
     "publish": "publish",
     "runLink": "run"
+  },
+  "presets": {
+    "title": "Presets",
+    "subtitle": "Pre-built pipelines. Pick one, tweak it, ship it.",
+    "newPreset": "New preset",
+    "empty": "No presets match this filter.",
+    "use": "Use",
+    "samplePrompts": "Sample prompts",
+    "maxCost": "Max cost cap",
+    "stepsCount_one": "{{count}} step",
+    "stepsCount_other": "{{count}} steps",
+    "confirmDelete": "Delete preset '{{name}}'? Existing runs keep their history.",
+    "cat": {
+      "all": "All",
+      "meme": "Memes",
+      "shorts": "Shorts",
+      "story": "Story",
+      "demo": "Demo",
+      "custom": "Custom"
+    },
+    "editor": {
+      "newTitle": "New preset",
+      "editTitle": "Edit preset",
+      "identity": "Identity",
+      "icon": "Icon",
+      "category": "Category",
+      "descriptionPlaceholder": "Who is this for? What does it produce?",
+      "maxCost": "Max cost (USD, 0 = no cap)",
+      "formatId": "Format ID (optional)",
+      "pipeline": "Pipeline",
+      "addStep": "add step",
+      "samplePrompts": "Sample prompts",
+      "samplePromptsHint": "Shown on the preset card and clickable in Studio to pre-fill the prompt field.",
+      "samplePlaceholder": "e.g. a hipster cat opens a coffee shop on Mars",
+      "addSample": "add sample",
+      "rawJson": "Raw JSON (debug)"
+    }
   },
   "dashboard": {
     "title": "Dashboard",

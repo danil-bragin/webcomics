@@ -149,6 +149,7 @@ func Build(cfg *config.Config) *do.RootScope {
 		pipecmd.CancelRunOnBus(reg, m)
 		pipecmd.CreateTemplateOnBus(reg, m)
 		pipecmd.UpdateTemplateOnBus(reg, m)
+		pipecmd.DeleteTemplateOnBus(reg, m)
 		pipeq.GetRunOnBus(reg, prm)
 		pipeq.ListRunsOnBus(reg, prm)
 		pipeq.GetTemplateOnBus(reg, prm)

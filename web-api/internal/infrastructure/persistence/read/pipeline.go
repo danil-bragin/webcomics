@@ -268,36 +268,88 @@ func (m *PipelineModel) scanSummaries(ctx context.Context, q string, args ...any
 	return out, rows.Err()
 }
 
-func (m *PipelineModel) GetTemplate(ctx context.Context, id string) (pipelineq.TemplateView, error) {
-	const q = `SELECT id, name, steps, max_cost_usd, created_at, updated_at FROM pipeline_templates WHERE id = $1`
-	var v pipelineq.TemplateView
-	var stepsRaw []byte
-	err := m.pool.QueryRow(ctx, q, id).Scan(&v.ID, &v.Name, &stepsRaw, &v.MaxCostUSD, &v.CreatedAt, &v.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return v, ErrNotFound
+const templateCols = `
+SELECT id, name, COALESCE(description,''), COALESCE(category,'custom'), COALESCE(icon,''),
+       steps, COALESCE(sample_prompts,'[]'::jsonb), COALESCE(format_id,''),
+       COALESCE(defaults,'{}'::jsonb), max_cost_usd, COALESCE(is_test,false),
+       created_at, updated_at
+FROM pipeline_templates`
+
+func scanTemplate(scan func(...any) error) (pipelineq.TemplateView, error) {
+	var t pipelineq.TemplateView
+	var stepsRaw, sampleRaw, defaultsRaw []byte
+	err := scan(&t.ID, &t.Name, &t.Description, &t.Category, &t.Icon,
+		&stepsRaw, &sampleRaw, &t.FormatID, &defaultsRaw, &t.MaxCostUSD, &t.IsTest,
+		&t.CreatedAt, &t.UpdatedAt)
+	if err != nil {
+		return t, err
 	}
-	v.Steps = json.RawMessage(stepsRaw)
-	return v, err
+	t.Steps = json.RawMessage(stepsRaw)
+	t.Defaults = json.RawMessage(defaultsRaw)
+	_ = json.Unmarshal(sampleRaw, &t.SamplePrompts)
+	if t.SamplePrompts == nil {
+		t.SamplePrompts = []string{}
+	}
+	return t, nil
+}
+
+func (m *PipelineModel) GetTemplate(ctx context.Context, id string) (pipelineq.TemplateView, error) {
+	row := m.pool.QueryRow(ctx, templateCols+" WHERE id = $1", id)
+	t, err := scanTemplate(row.Scan)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return t, ErrNotFound
+	}
+	return t, err
 }
 
 func (m *PipelineModel) ListTemplates(ctx context.Context) ([]pipelineq.TemplateView, error) {
-	const q = `SELECT id, name, steps, max_cost_usd, created_at, updated_at FROM pipeline_templates ORDER BY updated_at DESC`
-	rows, err := m.pool.Query(ctx, q)
+	return m.ListTemplatesFiltered(ctx, pipelineq.TemplateFilter{})
+}
+
+func (m *PipelineModel) ListTemplatesFiltered(ctx context.Context, f pipelineq.TemplateFilter) ([]pipelineq.TemplateView, error) {
+	q := templateCols
+	args := []any{}
+	conds := []string{}
+	if !f.IncludeTest {
+		conds = append(conds, "is_test = false")
+	}
+	if f.Category != "" {
+		args = append(args, f.Category)
+		conds = append(conds, "category = $"+itoa(len(args)))
+	}
+	if len(conds) > 0 {
+		q += " WHERE " + joinAnd(conds)
+	}
+	q += " ORDER BY category, name"
+	rows, err := m.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []pipelineq.TemplateView{}
 	for rows.Next() {
-		var t pipelineq.TemplateView
-		var stepsRaw []byte
-		if err := rows.Scan(&t.ID, &t.Name, &stepsRaw, &t.MaxCostUSD, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		t, err := scanTemplate(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
-		t.Steps = json.RawMessage(stepsRaw)
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+func itoa(n int) string {
+	if n < 10 {
+		return string('0' + byte(n))
+	}
+	return string('0'+byte(n/10)) + string('0'+byte(n%10))
+}
+
+func joinAnd(s []string) string {
+	out := s[0]
+	for _, x := range s[1:] {
+		out += " AND " + x
+	}
+	return out
 }
 
 func (m *PipelineModel) Stats(ctx context.Context) (pipelineq.StatsView, error) {

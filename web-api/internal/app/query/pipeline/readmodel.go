@@ -9,6 +9,7 @@ type ReadModel interface {
 	ListRuns(ctx context.Context, f ListRunsFilter) ([]RunSummary, error)
 	GetTemplate(ctx context.Context, id string) (TemplateView, error)
 	ListTemplates(ctx context.Context) ([]TemplateView, error)
+	ListTemplatesFiltered(ctx context.Context, f TemplateFilter) ([]TemplateView, error)
 	GetAssetRef(ctx context.Context, id string) (AssetRef, error)
 	Stats(ctx context.Context) (StatsView, error)
 

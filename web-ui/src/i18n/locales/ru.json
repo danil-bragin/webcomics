@@ -6,6 +6,7 @@
     "projects": "Проекты",
     "dashboard": "Панель",
     "templates": "Шаблоны",
+    "presets": "Пресеты",
     "audio": "Аудио"
   },
   "common": {
@@ -96,6 +97,9 @@
     "noEnvironmentsYet": "Окружений пока нет.",
     "includePlot": "Использовать сюжет",
     "pickTemplate": "выберите шаблон",
+    "openPresetsPage": "управление пресетами →",
+    "changePreset": "сменить пресет",
+    "clickToUse": "клик чтобы использовать",
     "stepsCount_one": "{{count}} шаг",
     "stepsCount_few": "{{count}} шага",
     "stepsCount_many": "{{count}} шагов",
@@ -346,6 +350,45 @@
     "noTitle": "без заголовка",
     "publish": "опубликовать",
     "runLink": "запуск"
+  },
+  "presets": {
+    "title": "Пресеты",
+    "subtitle": "Готовые пайплайны. Выберите, подкрутите, отправляйте.",
+    "newPreset": "Новый пресет",
+    "empty": "Пресетов по фильтру нет.",
+    "use": "Использовать",
+    "samplePrompts": "Примеры промптов",
+    "maxCost": "Лимит стоимости",
+    "stepsCount_one": "{{count}} шаг",
+    "stepsCount_few": "{{count}} шага",
+    "stepsCount_many": "{{count}} шагов",
+    "stepsCount_other": "{{count}} шагов",
+    "confirmDelete": "Удалить пресет '{{name}}'? Существующие запуски сохранят историю.",
+    "cat": {
+      "all": "Все",
+      "meme": "Мемы",
+      "shorts": "Shorts",
+      "story": "История",
+      "demo": "Демо",
+      "custom": "Свои"
+    },
+    "editor": {
+      "newTitle": "Новый пресет",
+      "editTitle": "Изменить пресет",
+      "identity": "Идентификация",
+      "icon": "Иконка",
+      "category": "Категория",
+      "descriptionPlaceholder": "Для кого? Что получится?",
+      "maxCost": "Лимит стоимости (USD, 0 = без лимита)",
+      "formatId": "ID формата (необязательно)",
+      "pipeline": "Пайплайн",
+      "addStep": "добавить шаг",
+      "samplePrompts": "Примеры промптов",
+      "samplePromptsHint": "Показываются на карточке пресета и в Studio для быстрого старта.",
+      "samplePlaceholder": "например: кот-хипстер открывает кофейню на Марсе",
+      "addSample": "добавить пример",
+      "rawJson": "Сырой JSON (debug)"
+    }
   },
   "dashboard": {
     "title": "Панель",

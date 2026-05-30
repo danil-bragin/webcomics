@@ -406,7 +406,11 @@ func (s *Server) CleanupRuns(w http.ResponseWriter, r *http.Request) {
 // --- templates ---
 
 func (s *Server) ListTemplates(w http.ResponseWriter, r *http.Request) {
-	res, err := bus.Ask[[]pipeq.TemplateView](r.Context(), s.reg, pipeq.ListTemplates{})
+	f := pipeq.TemplateFilter{
+		Category:    r.URL.Query().Get("category"),
+		IncludeTest: r.URL.Query().Get("include_test") == "true",
+	}
+	res, err := bus.Ask[[]pipeq.TemplateView](r.Context(), s.reg, pipeq.ListTemplates{Filter: f})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

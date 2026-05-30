@@ -69,6 +69,22 @@ export const api = {
   updateTemplate: (id: string, b: TemplateBody) =>
     request<void>(`/api/templates/${id}`, { method: "PUT", body: JSON.stringify(b) }),
 
+  // Presets — same data as templates but with rich marketplace metadata.
+  listPresets: (opts: { category?: string; include_test?: boolean } = {}) => {
+    const p = new URLSearchParams();
+    if (opts.category) p.set("category", opts.category);
+    if (opts.include_test) p.set("include_test", "true");
+    const qs = p.toString();
+    return request<PresetView[]>(`/api/presets${qs ? `?${qs}` : ""}`);
+  },
+  getPreset: (id: string) => request<PresetView>(`/api/presets/${id}`),
+  createPreset: (b: PresetBody) =>
+    request<{ id: string }>("/api/presets", { method: "POST", body: JSON.stringify(b) }),
+  updatePreset: (id: string, b: PresetBody) =>
+    request<void>(`/api/presets/${id}`, { method: "PUT", body: JSON.stringify(b) }),
+  deletePreset: (id: string) =>
+    request<void>(`/api/presets/${id}`, { method: "DELETE" }),
+
   listRuns: (opts?: { status?: string[]; q?: string; limit?: number; offset?: number; project_id?: string }) => {
     const params = new URLSearchParams();
     if (opts?.status && opts.status.length > 0) params.set("status", opts.status.join(","));
@@ -314,6 +330,36 @@ export type MusicTrack = {
   tempo: string;
   license: string;
   attribution?: string;
+};
+
+export type PresetCategory = "meme" | "shorts" | "story" | "demo" | "custom";
+
+export type PresetView = {
+  id: string;
+  name: string;
+  description?: string;
+  category?: PresetCategory;
+  icon?: string;
+  steps: StepConfig[];
+  sample_prompts?: string[];
+  format_id?: string;
+  defaults?: Record<string, unknown>;
+  max_cost_usd: number;
+  is_test?: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PresetBody = {
+  name: string;
+  description?: string;
+  category?: PresetCategory;
+  icon?: string;
+  steps: StepConfig[];
+  sample_prompts?: string[];
+  format_id?: string;
+  defaults?: Record<string, unknown>;
+  max_cost_usd?: number;
 };
 
 export type AudioTrack = {

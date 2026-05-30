@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api, type StepConfig, type TemplateView, type ElevenLabsVoice, type ProjectView, type ProjectDetailView, type FormatView } from "@/api/client";
+import { api, type StepConfig, type TemplateView, type ElevenLabsVoice, type ProjectView, type ProjectDetailView, type FormatView, type PresetView } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
@@ -76,7 +76,13 @@ export function Studio() {
   const [stepsJSON, setStepsJSON] = useState("");
   const [stepsError, setStepsError] = useState<string | null>(null);
 
-  const templates = useQuery({ queryKey: ["templates"], queryFn: api.listTemplates });
+  // Preset marketplace data — replaces the old flat template dropdown.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const presetsQ = useQuery({
+    queryKey: ["presets-studio"],
+    queryFn: () => api.listPresets(),
+  });
+  const templates = presetsQ; // legacy alias for downstream hydrate effect
   const voices = useQuery<ElevenLabsVoice[]>({
     queryKey: ["elevenlabs-voices"],
     queryFn: api.listVoices,
@@ -95,11 +101,23 @@ export function Studio() {
     if (!templateId || !templates.data) return;
     const t = templates.data.find((x) => x.id === templateId);
     if (!t) return;
-    hydrateFromTemplate(t, {
+    hydrateFromTemplate(t as unknown as TemplateView, {
       setPanelCount, setTargetDurationMs, setScriptModel, setImageModel,
       setSystemPrompt, setEnableAudio, setStepsJSON, setStyleRef,
     });
+    // Preset-only: apply language + auto-fill sample prompt when one is set
+    // on the preset and the user hasn't typed yet.
+    const p = t as PresetView;
+    if (p.defaults && typeof (p.defaults as any).language === "string") {
+      setLanguage((p.defaults as any).language);
+    }
   }, [templateId, templates.data]);
+
+  // Pre-select preset from ?preset=id in the URL (deep-link from /presets).
+  useEffect(() => {
+    const presetId = searchParams.get("preset");
+    if (presetId && presetId !== templateId) setTemplateId(presetId);
+  }, [searchParams, templateId]);
 
   // Hydrate Studio from a project's saved defaults when picked.
   useEffect(() => {
@@ -305,21 +323,17 @@ export function Studio() {
             </div>
           ) : null}
 
-          <div>
-            <label className="text-sm text-muted-foreground mb-1 block">{tt("studio.templateLabel")}</label>
-            <select
-              value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
-              className="h-9 w-full rounded-md border border-border bg-secondary/30 px-3 text-sm"
-            >
-              <option value="">— {tt("studio.pickTemplate")} —</option>
-              {templates.data?.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({tt("studio.stepsCount", { count: t.steps.length })}{t.max_cost_usd > 0 ? ` · cap $${t.max_cost_usd}` : ""})
-                </option>
-              ))}
-            </select>
-          </div>
+          <PresetPickerSection
+            presets={(presetsQ.data ?? []) as PresetView[]}
+            selectedId={templateId}
+            onPick={(id) => {
+              setTemplateId(id);
+              const next = new URLSearchParams(searchParams);
+              if (id) next.set("preset", id); else next.delete("preset");
+              setSearchParams(next, { replace: true });
+            }}
+            onUseSample={(text) => setPrompt(text)}
+          />
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">{tt("studio.promptLabel")}</label>
             <Textarea
@@ -581,6 +595,125 @@ export function Studio() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// Preset picker section — replaces the cryptic <select> dropdown with a card
+// that surfaces icon + name + step chain + sample prompts. Click "Change" to
+// re-open the marketplace inline.
+const STEP_GLYPH: Record<string, string> = {
+  script: "📝", image: "🖼", audio: "🎙", music: "🎵",
+  caption: "📰", assemble: "🎬", upload: "☁",
+};
+
+function PresetPickerSection({ presets, selectedId, onPick, onUseSample }: {
+  presets: PresetView[];
+  selectedId: string;
+  onPick: (id: string) => void;
+  onUseSample: (text: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [browsing, setBrowsing] = useState(!selectedId);
+  const selected = presets.find((p) => p.id === selectedId);
+
+  useEffect(() => {
+    // Auto-close the browser once a preset is chosen so the prompt field
+    // becomes the focus.
+    if (selectedId) setBrowsing(false);
+  }, [selectedId]);
+
+  if (browsing || !selected) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-sm text-muted-foreground">{t("presets.title")}</label>
+          <Link to="/presets" className="text-xs underline text-muted-foreground">{t("studio.openPresetsPage")}</Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
+          {presets.length === 0 ? (
+            <p className="text-xs text-muted-foreground col-span-full">{t("presets.empty")}</p>
+          ) : null}
+          {presets.map((p) => {
+            const steps = (p.steps ?? []) as { type: string }[];
+            return (
+              <button
+                key={p.id}
+                onClick={() => onPick(p.id)}
+                className="text-left rounded border border-border bg-secondary/20 hover:border-primary/60 p-3 transition-colors"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="text-xl leading-none">{p.icon || "📄"}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{p.name}</div>
+                    {p.description ? (
+                      <div className="text-[10px] text-muted-foreground line-clamp-2">{p.description}</div>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex items-center gap-0.5 mt-2 text-base">
+                  {steps.map((s, i) => (
+                    <span key={i} className="rounded bg-secondary/40 w-5 h-5 inline-flex items-center justify-center text-[10px]" title={s.type}>
+                      {STEP_GLYPH[s.type] ?? "·"}
+                    </span>
+                  ))}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  const steps = (selected.steps ?? []) as { type: string }[];
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-sm text-muted-foreground">{t("presets.title")}</label>
+        <button onClick={() => setBrowsing(true)} className="text-xs underline text-muted-foreground">
+          {t("studio.changePreset")}
+        </button>
+      </div>
+      <div className="rounded border border-border bg-secondary/10 p-3 space-y-2">
+        <div className="flex items-start gap-3">
+          <span className="text-3xl leading-none">{selected.icon || "📄"}</span>
+          <div className="flex-1 min-w-0">
+            <div className="font-medium">{selected.name}</div>
+            {selected.description ? (
+              <div className="text-xs text-muted-foreground mt-0.5">{selected.description}</div>
+            ) : null}
+          </div>
+          {selected.category ? (
+            <span className="text-[10px] rounded bg-secondary/40 px-1.5 py-0.5 uppercase">{selected.category}</span>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-1 text-base">
+          {steps.map((s, i) => (
+            <span key={i} className="flex items-center gap-1">
+              <span className="rounded bg-secondary/40 w-7 h-7 inline-flex items-center justify-center" title={s.type}>
+                {STEP_GLYPH[s.type] ?? "·"}
+              </span>
+              {i < steps.length - 1 ? <span className="text-muted-foreground text-xs">→</span> : null}
+            </span>
+          ))}
+        </div>
+        {selected.sample_prompts && selected.sample_prompts.length > 0 ? (
+          <div className="border-t border-border pt-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+              {t("presets.samplePrompts")} ({t("studio.clickToUse")})
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {selected.sample_prompts.map((s, i) => (
+                <button key={i} onClick={() => onUseSample(s)}
+                  className="text-[11px] text-left px-2 py-1 rounded bg-secondary/30 hover:bg-secondary/60 italic truncate max-w-full">
+                  — {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

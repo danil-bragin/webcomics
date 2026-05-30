@@ -11,6 +11,8 @@ import { TimelineEditor } from "./pages/TimelineEditor";
 import { Projects } from "./pages/Projects";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { AudioLibrary } from "./pages/AudioLibrary";
+import { Presets } from "./pages/Presets";
+import { PresetEditor } from "./pages/PresetEditor";
 import { SUPPORTED_LANGS } from "./i18n";
 
 const qc = new QueryClient();
@@ -38,7 +40,7 @@ const NavLinks = () => {
       <NavLink to="/runs" className={item}>{t("nav.runs")}</NavLink>
       <NavLink to="/projects" className={item}>{t("nav.projects")}</NavLink>
       <NavLink to="/dashboard" className={item}>{t("nav.dashboard")}</NavLink>
-      <NavLink to="/templates" className={item}>{t("nav.templates")}</NavLink>
+      <NavLink to="/presets" className={item}>{t("nav.presets")}</NavLink>
       <NavLink to="/library/audio" className={item}>{t("nav.audio")}</NavLink>
     </>
   );
@@ -78,6 +80,9 @@ export default function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/library/audio" element={<AudioLibrary />} />
+          <Route path="/presets" element={<Presets />} />
+          <Route path="/presets/new" element={<PresetEditor />} />
+          <Route path="/presets/:id/edit" element={<PresetEditor />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

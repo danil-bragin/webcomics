@@ -133,6 +133,7 @@ func (s *Server) Router() http.Handler {
 	r.Post("/api/uploads/presign", s.PresignUploadRef)
 	s.MountFirefoxLogin(r)
 	s.MountUploadRecords(r)
+	s.MountPresets(r)
 	if s.audioLib != nil {
 		s.MountAudioLibrary(r, s.audioLib)
 	}
