@@ -65,13 +65,28 @@ type ProjectDetailView struct {
 	Plot           *PlotView            `json:"plot,omitempty"`
 }
 
+// SocialAccountView is the read DTO for a SocialAccount. ProjectID + IsDefault
+// are populated only when the view is fetched inside a project context (e.g.
+// ListSocialAccounts(projectID)); for the global library list those stay zero
+// and ProjectCount / UploadCount carry usage stats instead.
 type SocialAccountView struct {
-	ID                 string          `json:"id"`
-	ProjectID          string          `json:"project_id"`
-	Platform           string          `json:"platform"`
-	Label              string          `json:"label"`
-	FirefoxProfilePath string          `json:"firefox_profile_path"`
-	Extra              json.RawMessage `json:"extra"`
-	CreatedAt          time.Time       `json:"created_at"`
-	UpdatedAt          time.Time       `json:"updated_at"`
+	ID                   string          `json:"id"`
+	ProjectID            string          `json:"project_id,omitempty"`
+	Platform             string          `json:"platform"`
+	Label                string          `json:"label"`
+	FirefoxProfilePath   string          `json:"firefox_profile_path"`
+	Extra                json.RawMessage `json:"extra"`
+	Status               string          `json:"status"`
+	LastUsedAt           *time.Time      `json:"last_used_at,omitempty"`
+	CooldownUntil        *time.Time      `json:"cooldown_until,omitempty"`
+	FailureStreak        int             `json:"failure_streak"`
+	DefaultVisibility    string          `json:"default_visibility"`
+	DefaultMadeForKids   bool            `json:"default_made_for_kids"`
+	DefaultCategoryID    string          `json:"default_category_id"`
+	DefaultCategoryLabel string          `json:"default_category_label"`
+	IsDefault            bool            `json:"is_default,omitempty"`
+	ProjectCount         int             `json:"project_count,omitempty"`
+	UploadCount          int             `json:"upload_count,omitempty"`
+	CreatedAt            time.Time       `json:"created_at"`
+	UpdatedAt            time.Time       `json:"updated_at"`
 }

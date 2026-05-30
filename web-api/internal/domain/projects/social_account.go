@@ -15,35 +15,38 @@ var (
 
 type SocialAccountID string
 
-func NewSocialAccountID() SocialAccountID    { return SocialAccountID(uuid.NewString()) }
-func (id SocialAccountID) String() string    { return string(id) }
+func NewSocialAccountID() SocialAccountID { return SocialAccountID(uuid.NewString()) }
+func (id SocialAccountID) String() string { return string(id) }
 
 // SocialAccountStatus codifies the scheduler's view of an account.
 type SocialAccountStatus string
 
 const (
-	SocialAccountStatusActive        SocialAccountStatus = "active"
-	SocialAccountStatusNeedsRelogin  SocialAccountStatus = "needs_relogin"
-	SocialAccountStatusBanned        SocialAccountStatus = "banned"
-	SocialAccountStatusDisabled      SocialAccountStatus = "disabled"
+	SocialAccountStatusActive       SocialAccountStatus = "active"
+	SocialAccountStatusNeedsRelogin SocialAccountStatus = "needs_relogin"
+	SocialAccountStatusBanned       SocialAccountStatus = "banned"
+	SocialAccountStatusDisabled     SocialAccountStatus = "disabled"
 )
 
 // SocialAccount represents a pre-authenticated identity on one platform.
 // For selenium providers it stores the Firefox profile path; future API
 // providers can stash OAuth tokens in `extra`.
+//
+// Global by design: no project ownership. Projects reference accounts via
+// the project_social_account_links table; one account can be linked to N
+// projects. Cooldown / failure streak live here once, shared by all links.
 type SocialAccount struct {
 	id                 SocialAccountID
-	projectID          ProjectID
 	platform           string // youtube_selenium | twitter_selenium | post_bridge | ...
 	label              string
 	firefoxProfilePath string
 	extra              map[string]any
 
 	// Scheduling.
-	status         SocialAccountStatus
-	lastUsedAt     *time.Time
-	cooldownUntil  *time.Time
-	failureStreak  int
+	status        SocialAccountStatus
+	lastUsedAt    *time.Time
+	cooldownUntil *time.Time
+	failureStreak int
 
 	// Per-account upload defaults applied when run/template/project don't override.
 	defaultVisibility    string // public | unlisted | private
@@ -55,7 +58,7 @@ type SocialAccount struct {
 	updatedAt time.Time
 }
 
-func NewSocialAccount(projectID ProjectID, platform, label, firefoxProfilePath string, extra map[string]any) (*SocialAccount, error) {
+func NewSocialAccount(platform, label, firefoxProfilePath string, extra map[string]any) (*SocialAccount, error) {
 	platform = strings.TrimSpace(platform)
 	if platform == "" {
 		return nil, ErrSocialAccountNoPlatform
@@ -66,7 +69,6 @@ func NewSocialAccount(projectID ProjectID, platform, label, firefoxProfilePath s
 	now := time.Now().UTC()
 	return &SocialAccount{
 		id:                   NewSocialAccountID(),
-		projectID:            projectID,
 		platform:             platform,
 		label:                label,
 		firefoxProfilePath:   firefoxProfilePath,
@@ -80,22 +82,21 @@ func NewSocialAccount(projectID ProjectID, platform, label, firefoxProfilePath s
 	}, nil
 }
 
-func (s *SocialAccount) ID() SocialAccountID            { return s.id }
-func (s *SocialAccount) ProjectID() ProjectID           { return s.projectID }
-func (s *SocialAccount) Platform() string               { return s.platform }
-func (s *SocialAccount) Label() string                  { return s.label }
-func (s *SocialAccount) FirefoxProfilePath() string     { return s.firefoxProfilePath }
-func (s *SocialAccount) Extra() map[string]any          { return s.extra }
-func (s *SocialAccount) Status() SocialAccountStatus    { return s.status }
-func (s *SocialAccount) LastUsedAt() *time.Time         { return s.lastUsedAt }
-func (s *SocialAccount) CooldownUntil() *time.Time      { return s.cooldownUntil }
-func (s *SocialAccount) FailureStreak() int             { return s.failureStreak }
-func (s *SocialAccount) DefaultVisibility() string      { return s.defaultVisibility }
-func (s *SocialAccount) DefaultMadeForKids() bool       { return s.defaultMadeForKids }
-func (s *SocialAccount) DefaultCategoryID() string      { return s.defaultCategoryID }
-func (s *SocialAccount) DefaultCategoryLabel() string   { return s.defaultCategoryLabel }
-func (s *SocialAccount) CreatedAt() time.Time           { return s.createdAt }
-func (s *SocialAccount) UpdatedAt() time.Time           { return s.updatedAt }
+func (s *SocialAccount) ID() SocialAccountID          { return s.id }
+func (s *SocialAccount) Platform() string             { return s.platform }
+func (s *SocialAccount) Label() string                { return s.label }
+func (s *SocialAccount) FirefoxProfilePath() string   { return s.firefoxProfilePath }
+func (s *SocialAccount) Extra() map[string]any        { return s.extra }
+func (s *SocialAccount) Status() SocialAccountStatus  { return s.status }
+func (s *SocialAccount) LastUsedAt() *time.Time       { return s.lastUsedAt }
+func (s *SocialAccount) CooldownUntil() *time.Time    { return s.cooldownUntil }
+func (s *SocialAccount) FailureStreak() int           { return s.failureStreak }
+func (s *SocialAccount) DefaultVisibility() string    { return s.defaultVisibility }
+func (s *SocialAccount) DefaultMadeForKids() bool     { return s.defaultMadeForKids }
+func (s *SocialAccount) DefaultCategoryID() string    { return s.defaultCategoryID }
+func (s *SocialAccount) DefaultCategoryLabel() string { return s.defaultCategoryLabel }
+func (s *SocialAccount) CreatedAt() time.Time         { return s.createdAt }
+func (s *SocialAccount) UpdatedAt() time.Time         { return s.updatedAt }
 
 // SetStatus updates the lifecycle state of the account. Setters bumped here
 // because the scheduler + worker need them across packages.
@@ -154,26 +155,10 @@ func (s *SocialAccount) Update(platform, label, profilePath string, extra map[st
 	s.updatedAt = time.Now().UTC()
 }
 
-func ReconstituteSocialAccount(id SocialAccountID, pid ProjectID, platform, label, profilePath string, extra map[string]any, created, updated time.Time) *SocialAccount {
-	if extra == nil {
-		extra = map[string]any{}
-	}
-	return &SocialAccount{
-		id: id, projectID: pid, platform: platform, label: label,
-		firefoxProfilePath: profilePath, extra: extra,
-		status:               SocialAccountStatusActive,
-		defaultVisibility:    "unlisted",
-		defaultCategoryID:    "22",
-		defaultCategoryLabel: "People & Blogs",
-		createdAt:            created,
-		updatedAt:            updated,
-	}
-}
-
 // ReconstituteSocialAccountFull rebuilds the aggregate including scheduling
 // + per-account defaults. Used by the write repository to load full state.
 func ReconstituteSocialAccountFull(
-	id SocialAccountID, pid ProjectID,
+	id SocialAccountID,
 	platform, label, profilePath string, extra map[string]any,
 	status SocialAccountStatus, lastUsed, cooldown *time.Time, failureStreak int,
 	defVis string, defKids bool, defCatID, defCatLabel string,
@@ -195,11 +180,20 @@ func ReconstituteSocialAccountFull(
 		defCatLabel = "People & Blogs"
 	}
 	return &SocialAccount{
-		id: id, projectID: pid, platform: platform, label: label,
+		id: id, platform: platform, label: label,
 		firefoxProfilePath: profilePath, extra: extra,
 		status: status, lastUsedAt: lastUsed, cooldownUntil: cooldown, failureStreak: failureStreak,
 		defaultVisibility: defVis, defaultMadeForKids: defKids,
 		defaultCategoryID: defCatID, defaultCategoryLabel: defCatLabel,
 		createdAt: created, updatedAt: updated,
 	}
+}
+
+// ProjectSocialAccountLink is the join entity: which projects use which
+// global account, with an optional "is_default for this platform" flag.
+type ProjectSocialAccountLink struct {
+	ProjectID       ProjectID
+	SocialAccountID SocialAccountID
+	IsDefault       bool
+	CreatedAt       time.Time
 }

@@ -6,6 +6,7 @@ package pipeline
 import (
 	"context"
 	"maps"
+	"strings"
 
 	"github.com/example/dddcqrs/internal/app/bus"
 	"github.com/example/dddcqrs/internal/domain/formats"
@@ -352,12 +353,60 @@ func (h *CreateRunHandler) Handle(ctx context.Context, cmd CreateRun) (CreateRun
 		if projectDefaults != nil {
 			mergedOverrides = mergeProjectDefaults(mergedOverrides, projectDefaults)
 		}
-		// Resolve social account → upload step params (firefox_profile_path).
-		if mergedOverrides != nil && mergedOverrides.Upload != nil && len(mergedOverrides.Upload.SocialAccountIDs) > 0 {
-			acct, err := repos.Projects().GetSocialAccount(ctx, projects.SocialAccountID(mergedOverrides.Upload.SocialAccountIDs[0]))
-			if err == nil && acct != nil {
-				if mergedOverrides.Upload.Provider == "" {
-					mergedOverrides.Upload.Provider = acct.Platform()
+		// Resolve social account for upload step. Order:
+		//   1. Explicit overrides.upload.social_account_ids (from run create body)
+		//   2. Project's default linked account on the upload platform
+		//   3. (later) any active linked account on the platform
+		// If still none and upload is enabled, the run will fail at upload time
+		// with a clear "no social account available" error.
+		if mergedOverrides != nil && mergedOverrides.Upload != nil {
+			if len(mergedOverrides.Upload.SocialAccountIDs) == 0 && cmd.ProjectID != "" {
+				links, lerr := repos.Projects().ListLinkedSocialAccounts(ctx, projects.ProjectID(cmd.ProjectID))
+				if lerr == nil {
+					wantPlatform := strings.TrimSpace(mergedOverrides.Upload.Provider)
+					var picked *projects.SocialAccount
+					// Pass 1: explicit-platform default.
+					for _, l := range links {
+						if !l.IsDefault {
+							continue
+						}
+						if wantPlatform == "" || l.Account.Platform() == wantPlatform {
+							picked = l.Account
+							break
+						}
+					}
+					// Pass 2: any default link (if no platform constraint).
+					if picked == nil && wantPlatform == "" {
+						for _, l := range links {
+							if l.IsDefault {
+								picked = l.Account
+								break
+							}
+						}
+					}
+					// Pass 3: any active link matching platform (no default set).
+					if picked == nil {
+						for _, l := range links {
+							if l.Account.Status() != projects.SocialAccountStatusActive {
+								continue
+							}
+							if wantPlatform == "" || l.Account.Platform() == wantPlatform {
+								picked = l.Account
+								break
+							}
+						}
+					}
+					if picked != nil {
+						mergedOverrides.Upload.SocialAccountIDs = []string{picked.ID().String()}
+					}
+				}
+			}
+			if len(mergedOverrides.Upload.SocialAccountIDs) > 0 {
+				acct, err := repos.Projects().GetSocialAccount(ctx, projects.SocialAccountID(mergedOverrides.Upload.SocialAccountIDs[0]))
+				if err == nil && acct != nil {
+					if mergedOverrides.Upload.Provider == "" {
+						mergedOverrides.Upload.Provider = acct.Platform()
+					}
 				}
 			}
 		}

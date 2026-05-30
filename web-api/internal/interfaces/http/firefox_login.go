@@ -313,8 +313,8 @@ func (s *Server) MountFirefoxLogin(r chi.Router) {
 				writeErr(w, http.StatusBadRequest, "invalid json")
 				return
 			}
-			if body.ProjectID == "" || body.Platform == "" {
-				writeErr(w, http.StatusBadRequest, "project_id and platform required")
+			if body.Platform == "" {
+				writeErr(w, http.StatusBadRequest, "platform required")
 				return
 			}
 			sess, err := mgr.start(req.Context(), body.ProjectID, body.Platform, body.Label)

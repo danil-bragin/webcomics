@@ -206,9 +206,14 @@ func Build(cfg *config.Config) *do.RootScope {
 		projcmd.UpsertPlotOnBus(reg, m)
 		projcmd.UpsertSocialAccountOnBus(reg, m)
 		projcmd.DeleteSocialAccountOnBus(reg, m)
+		projcmd.LinkSocialAccountOnBus(reg, m)
+		projcmd.UnlinkSocialAccountOnBus(reg, m)
+		projcmd.SetDefaultSocialAccountOnBus(reg, m)
 		projq.GetProjectOnBus(reg, pjm)
 		projq.ListProjectsOnBus(reg, pjm)
 		projq.GetProjectDetailOnBus(reg, pjm)
+		projq.ListProjectSocialAccountsOnBus(reg, pjm)
+		projq.ListSocialAccountsGlobalOnBus(reg, pjm)
 
 		return reg, nil
 	})

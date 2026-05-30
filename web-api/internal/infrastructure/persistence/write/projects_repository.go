@@ -283,16 +283,16 @@ func (r *ProjectsRepository) DeletePlot(ctx context.Context, projectID projects.
 	return err
 }
 
-// --- Social accounts ---
+// --- Social accounts (global) ---
 
 const upsSocialAccount = `
 INSERT INTO social_accounts (
-  id, project_id, platform, label, firefox_profile_path, extra,
+  id, platform, label, firefox_profile_path, extra,
   status, last_used_at, cooldown_until, failure_streak,
   default_visibility, default_made_for_kids, default_category_id, default_category_label,
   created_at, updated_at
 )
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 ON CONFLICT (id) DO UPDATE SET
   platform = EXCLUDED.platform,
   label = EXCLUDED.label,
@@ -311,7 +311,7 @@ ON CONFLICT (id) DO UPDATE SET
 func (r *ProjectsRepository) SaveSocialAccount(ctx context.Context, a *projects.SocialAccount) error {
 	extraJSON, _ := json.Marshal(a.Extra())
 	_, err := r.tx.Exec(ctx, upsSocialAccount,
-		a.ID().String(), a.ProjectID().String(),
+		a.ID().String(),
 		a.Platform(), a.Label(), a.FirefoxProfilePath(), extraJSON,
 		string(a.Status()), a.LastUsedAt(), a.CooldownUntil(), a.FailureStreak(),
 		a.DefaultVisibility(), a.DefaultMadeForKids(), a.DefaultCategoryID(), a.DefaultCategoryLabel(),
@@ -319,17 +319,15 @@ func (r *ProjectsRepository) SaveSocialAccount(ctx context.Context, a *projects.
 	return err
 }
 
-const selSocialAccount = `
-SELECT id, project_id, platform, label, firefox_profile_path, COALESCE(extra,'{}'::jsonb),
+const selSocialAccountCols = `id, platform, label, firefox_profile_path, COALESCE(extra,'{}'::jsonb),
        COALESCE(status,'active'), last_used_at, cooldown_until, COALESCE(failure_streak,0),
        COALESCE(default_visibility,'unlisted'), COALESCE(default_made_for_kids,false),
        COALESCE(default_category_id,'22'), COALESCE(default_category_label,'People & Blogs'),
-       created_at, updated_at
-FROM social_accounts WHERE id = $1 FOR UPDATE`
+       created_at, updated_at`
 
-func (r *ProjectsRepository) GetSocialAccount(ctx context.Context, id projects.SocialAccountID) (*projects.SocialAccount, error) {
+func scanSocialAccount(scan func(...any) error) (*projects.SocialAccount, error) {
 	var (
-		sid, pid, platform, label, profilePath string
+		sid, platform, label, profilePath      string
 		extraRaw                               []byte
 		statusStr, defVis, defCatID, defCatLab string
 		defKids                                bool
@@ -337,20 +335,16 @@ func (r *ProjectsRepository) GetSocialAccount(ctx context.Context, id projects.S
 		lastUsed, cooldown                     *time.Time
 		created, updated                       time.Time
 	)
-	row := r.tx.QueryRow(ctx, selSocialAccount, id.String())
-	if err := row.Scan(&sid, &pid, &platform, &label, &profilePath, &extraRaw,
+	if err := scan(&sid, &platform, &label, &profilePath, &extraRaw,
 		&statusStr, &lastUsed, &cooldown, &failureStreak,
 		&defVis, &defKids, &defCatID, &defCatLab,
 		&created, &updated); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, projects.ErrSocialAccountNotFound
-		}
 		return nil, err
 	}
 	extra := map[string]any{}
 	_ = json.Unmarshal(extraRaw, &extra)
 	return projects.ReconstituteSocialAccountFull(
-		projects.SocialAccountID(sid), projects.ProjectID(pid),
+		projects.SocialAccountID(sid),
 		platform, label, profilePath, extra,
 		projects.SocialAccountStatus(statusStr), lastUsed, cooldown, failureStreak,
 		defVis, defKids, defCatID, defCatLab,
@@ -358,45 +352,31 @@ func (r *ProjectsRepository) GetSocialAccount(ctx context.Context, id projects.S
 	), nil
 }
 
-const listSocialAccountsSQL = `SELECT id, project_id, platform, label, firefox_profile_path, COALESCE(extra,'{}'::jsonb),
-       COALESCE(status,'active'), last_used_at, cooldown_until, COALESCE(failure_streak,0),
-       COALESCE(default_visibility,'unlisted'), COALESCE(default_made_for_kids,false),
-       COALESCE(default_category_id,'22'), COALESCE(default_category_label,'People & Blogs'),
-       created_at, updated_at
-   FROM social_accounts WHERE project_id = $1 ORDER BY created_at ASC`
+func (r *ProjectsRepository) GetSocialAccount(ctx context.Context, id projects.SocialAccountID) (*projects.SocialAccount, error) {
+	row := r.tx.QueryRow(ctx, `SELECT `+selSocialAccountCols+` FROM social_accounts WHERE id = $1 FOR UPDATE`, id.String())
+	a, err := scanSocialAccount(row.Scan)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, projects.ErrSocialAccountNotFound
+		}
+		return nil, err
+	}
+	return a, nil
+}
 
-func (r *ProjectsRepository) ListSocialAccounts(ctx context.Context, projectID projects.ProjectID) ([]*projects.SocialAccount, error) {
-	rows, err := r.tx.Query(ctx, listSocialAccountsSQL, projectID.String())
+func (r *ProjectsRepository) ListAllSocialAccounts(ctx context.Context) ([]*projects.SocialAccount, error) {
+	rows, err := r.tx.Query(ctx, `SELECT `+selSocialAccountCols+` FROM social_accounts ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []*projects.SocialAccount{}
 	for rows.Next() {
-		var (
-			sid, pid, platform, label, profilePath string
-			extraRaw                               []byte
-			statusStr, defVis, defCatID, defCatLab string
-			defKids                                bool
-			failureStreak                          int
-			lastUsed, cooldown                     *time.Time
-			created, updated                       time.Time
-		)
-		if err := rows.Scan(&sid, &pid, &platform, &label, &profilePath, &extraRaw,
-			&statusStr, &lastUsed, &cooldown, &failureStreak,
-			&defVis, &defKids, &defCatID, &defCatLab,
-			&created, &updated); err != nil {
+		a, err := scanSocialAccount(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
-		extra := map[string]any{}
-		_ = json.Unmarshal(extraRaw, &extra)
-		out = append(out, projects.ReconstituteSocialAccountFull(
-			projects.SocialAccountID(sid), projects.ProjectID(pid),
-			platform, label, profilePath, extra,
-			projects.SocialAccountStatus(statusStr), lastUsed, cooldown, failureStreak,
-			defVis, defKids, defCatID, defCatLab,
-			created, updated,
-		))
+		out = append(out, a)
 	}
 	return out, rows.Err()
 }
@@ -405,3 +385,140 @@ func (r *ProjectsRepository) DeleteSocialAccount(ctx context.Context, id project
 	_, err := r.tx.Exec(ctx, `DELETE FROM social_accounts WHERE id = $1`, id.String())
 	return err
 }
+
+// --- Project ↔ SocialAccount links ---
+
+func (r *ProjectsRepository) LinkSocialAccount(ctx context.Context, projectID projects.ProjectID, accountID projects.SocialAccountID, asDefault bool) error {
+	if _, err := r.tx.Exec(ctx,
+		`INSERT INTO project_social_account_links (project_id, social_account_id, is_default)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (project_id, social_account_id) DO UPDATE SET is_default = EXCLUDED.is_default`,
+		projectID.String(), accountID.String(), asDefault); err != nil {
+		return err
+	}
+	if asDefault {
+		return r.clearOtherDefaults(ctx, projectID, accountID)
+	}
+	return nil
+}
+
+func (r *ProjectsRepository) UnlinkSocialAccount(ctx context.Context, projectID projects.ProjectID, accountID projects.SocialAccountID) error {
+	_, err := r.tx.Exec(ctx,
+		`DELETE FROM project_social_account_links WHERE project_id = $1 AND social_account_id = $2`,
+		projectID.String(), accountID.String())
+	return err
+}
+
+// SetDefaultSocialAccount marks the link as default for its account's platform
+// and clears any prior default on the same platform inside this project.
+func (r *ProjectsRepository) SetDefaultSocialAccount(ctx context.Context, projectID projects.ProjectID, accountID projects.SocialAccountID) error {
+	tag, err := r.tx.Exec(ctx,
+		`UPDATE project_social_account_links SET is_default = TRUE
+		 WHERE project_id = $1 AND social_account_id = $2`,
+		projectID.String(), accountID.String())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		// Auto-link if the project hasn't linked this account yet.
+		if err := r.LinkSocialAccount(ctx, projectID, accountID, true); err != nil {
+			return err
+		}
+	}
+	return r.clearOtherDefaults(ctx, projectID, accountID)
+}
+
+// clearOtherDefaults unsets is_default on every other link in the same project
+// that shares the platform of the just-promoted account. One default per
+// (project, platform) — enforced in app code, not as a DB constraint.
+func (r *ProjectsRepository) clearOtherDefaults(ctx context.Context, projectID projects.ProjectID, keepAccountID projects.SocialAccountID) error {
+	_, err := r.tx.Exec(ctx, `
+		UPDATE project_social_account_links AS l
+		   SET is_default = FALSE
+		  FROM social_accounts AS a, social_accounts AS keep
+		 WHERE l.project_id = $1
+		   AND l.social_account_id = a.id
+		   AND keep.id = $2
+		   AND a.platform = keep.platform
+		   AND l.social_account_id <> $2`,
+		projectID.String(), keepAccountID.String())
+	return err
+}
+
+func (r *ProjectsRepository) ListProjectLinks(ctx context.Context, projectID projects.ProjectID) ([]projects.ProjectSocialAccountLink, error) {
+	rows, err := r.tx.Query(ctx,
+		`SELECT project_id, social_account_id, is_default, created_at
+		   FROM project_social_account_links WHERE project_id = $1 ORDER BY created_at ASC`,
+		projectID.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []projects.ProjectSocialAccountLink{}
+	for rows.Next() {
+		var (
+			pid, aid string
+			isDef    bool
+			created  time.Time
+		)
+		if err := rows.Scan(&pid, &aid, &isDef, &created); err != nil {
+			return nil, err
+		}
+		out = append(out, projects.ProjectSocialAccountLink{
+			ProjectID:       projects.ProjectID(pid),
+			SocialAccountID: projects.SocialAccountID(aid),
+			IsDefault:       isDef,
+			CreatedAt:       created,
+		})
+	}
+	return out, rows.Err()
+}
+
+func (r *ProjectsRepository) ListLinkedSocialAccounts(ctx context.Context, projectID projects.ProjectID) ([]projects.LinkedSocialAccount, error) {
+	rows, err := r.tx.Query(ctx,
+		`SELECT a.id, a.platform, a.label, a.firefox_profile_path, COALESCE(a.extra,'{}'::jsonb),
+		        COALESCE(a.status,'active'), a.last_used_at, a.cooldown_until, COALESCE(a.failure_streak,0),
+		        COALESCE(a.default_visibility,'unlisted'), COALESCE(a.default_made_for_kids,false),
+		        COALESCE(a.default_category_id,'22'), COALESCE(a.default_category_label,'People & Blogs'),
+		        a.created_at, a.updated_at, l.is_default
+		   FROM project_social_account_links l
+		   JOIN social_accounts a ON a.id = l.social_account_id
+		  WHERE l.project_id = $1
+		  ORDER BY l.is_default DESC, l.created_at ASC`,
+		projectID.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []projects.LinkedSocialAccount{}
+	for rows.Next() {
+		var (
+			sid, platform, label, profilePath      string
+			extraRaw                               []byte
+			statusStr, defVis, defCatID, defCatLab string
+			defKids                                bool
+			failureStreak                          int
+			lastUsed, cooldown                     *time.Time
+			created, updated                       time.Time
+			isDef                                  bool
+		)
+		if err := rows.Scan(&sid, &platform, &label, &profilePath, &extraRaw,
+			&statusStr, &lastUsed, &cooldown, &failureStreak,
+			&defVis, &defKids, &defCatID, &defCatLab,
+			&created, &updated, &isDef); err != nil {
+			return nil, err
+		}
+		extra := map[string]any{}
+		_ = json.Unmarshal(extraRaw, &extra)
+		acct := projects.ReconstituteSocialAccountFull(
+			projects.SocialAccountID(sid),
+			platform, label, profilePath, extra,
+			projects.SocialAccountStatus(statusStr), lastUsed, cooldown, failureStreak,
+			defVis, defKids, defCatID, defCatLab,
+			created, updated,
+		)
+		out = append(out, projects.LinkedSocialAccount{Account: acct, IsDefault: isDef})
+	}
+	return out, rows.Err()
+}
+

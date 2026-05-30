@@ -16,6 +16,7 @@ import { Presets } from "./pages/Presets";
 import { PresetEditor } from "./pages/PresetEditor";
 import { Formats } from "./pages/Formats";
 import { FormatEditor } from "./pages/FormatEditor";
+import { SocialAccounts } from "./pages/SocialAccounts";
 import { SUPPORTED_LANGS } from "./i18n";
 
 const qc = new QueryClient();
@@ -46,6 +47,7 @@ const NavLinks = () => {
       <NavLink to="/presets" className={item}>{t("nav.presets")}</NavLink>
       <NavLink to="/formats" className={item}>{t("nav.formats")}</NavLink>
       <NavLink to="/library/audio" className={item}>{t("nav.audio")}</NavLink>
+      <NavLink to="/social" className={item}>{t("nav.social", "Социальные")}</NavLink>
     </>
   );
 };
@@ -85,6 +87,7 @@ export default function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/library/audio" element={<AudioLibrary />} />
+          <Route path="/social" element={<SocialAccounts />} />
           <Route path="/presets" element={<Presets />} />
           <Route path="/presets/new" element={<PresetEditor />} />
           <Route path="/presets/:id/edit" element={<PresetEditor />} />

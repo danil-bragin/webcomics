@@ -92,9 +92,18 @@ func (m *ProjectsModel) GetProjectDetail(ctx context.Context, id string) (pq.Pro
 	return d, nil
 }
 
+// ListSocialAccounts returns the accounts LINKED to the given project (via
+// project_social_account_links). Each row carries the is_default flag.
 func (m *ProjectsModel) ListSocialAccounts(ctx context.Context, projectID string) ([]pq.SocialAccountView, error) {
-	const q = `SELECT id, COALESCE(project_id,''), platform, label, firefox_profile_path, COALESCE(extra,'{}'::jsonb), created_at, updated_at
-		FROM social_accounts WHERE project_id = $1 ORDER BY created_at ASC`
+	const q = `SELECT a.id, a.platform, a.label, a.firefox_profile_path, COALESCE(a.extra,'{}'::jsonb),
+	                  COALESCE(a.status,'active'), a.last_used_at, a.cooldown_until, COALESCE(a.failure_streak,0),
+	                  COALESCE(a.default_visibility,'unlisted'), COALESCE(a.default_made_for_kids,false),
+	                  COALESCE(a.default_category_id,'22'), COALESCE(a.default_category_label,'People & Blogs'),
+	                  a.created_at, a.updated_at, l.is_default
+		FROM project_social_account_links l
+		JOIN social_accounts a ON a.id = l.social_account_id
+		WHERE l.project_id = $1
+		ORDER BY l.is_default DESC, l.created_at ASC`
 	rows, err := m.pool.Query(ctx, q, projectID)
 	if err != nil {
 		return nil, err
@@ -104,7 +113,49 @@ func (m *ProjectsModel) ListSocialAccounts(ctx context.Context, projectID string
 	for rows.Next() {
 		var v pq.SocialAccountView
 		var extraRaw []byte
-		if err := rows.Scan(&v.ID, &v.ProjectID, &v.Platform, &v.Label, &v.FirefoxProfilePath, &extraRaw, &v.CreatedAt, &v.UpdatedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.Platform, &v.Label, &v.FirefoxProfilePath, &extraRaw,
+			&v.Status, &v.LastUsedAt, &v.CooldownUntil, &v.FailureStreak,
+			&v.DefaultVisibility, &v.DefaultMadeForKids, &v.DefaultCategoryID, &v.DefaultCategoryLabel,
+			&v.CreatedAt, &v.UpdatedAt, &v.IsDefault); err != nil {
+			return nil, err
+		}
+		v.ProjectID = projectID
+		v.Extra = json.RawMessage(extraRaw)
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// ListAllSocialAccounts returns every account regardless of project linkage.
+// Powers the new /social page (global library).
+func (m *ProjectsModel) ListAllSocialAccounts(ctx context.Context, filterPlatform string) ([]pq.SocialAccountView, error) {
+	q := `SELECT a.id, a.platform, a.label, a.firefox_profile_path, COALESCE(a.extra,'{}'::jsonb),
+	             COALESCE(a.status,'active'), a.last_used_at, a.cooldown_until, COALESCE(a.failure_streak,0),
+	             COALESCE(a.default_visibility,'unlisted'), COALESCE(a.default_made_for_kids,false),
+	             COALESCE(a.default_category_id,'22'), COALESCE(a.default_category_label,'People & Blogs'),
+	             a.created_at, a.updated_at,
+	             (SELECT COUNT(*) FROM project_social_account_links WHERE social_account_id = a.id) AS project_count,
+	             (SELECT COUNT(*) FROM pipeline_upload_records WHERE social_account_id = a.id) AS upload_count
+		FROM social_accounts a`
+	args := []any{}
+	if filterPlatform != "" {
+		q += ` WHERE a.platform = $1`
+		args = append(args, filterPlatform)
+	}
+	q += ` ORDER BY a.created_at DESC`
+	rows, err := m.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []pq.SocialAccountView{}
+	for rows.Next() {
+		var v pq.SocialAccountView
+		var extraRaw []byte
+		if err := rows.Scan(&v.ID, &v.Platform, &v.Label, &v.FirefoxProfilePath, &extraRaw,
+			&v.Status, &v.LastUsedAt, &v.CooldownUntil, &v.FailureStreak,
+			&v.DefaultVisibility, &v.DefaultMadeForKids, &v.DefaultCategoryID, &v.DefaultCategoryLabel,
+			&v.CreatedAt, &v.UpdatedAt, &v.ProjectCount, &v.UploadCount); err != nil {
 			return nil, err
 		}
 		v.Extra = json.RawMessage(extraRaw)

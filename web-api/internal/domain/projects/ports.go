@@ -2,8 +2,9 @@ package projects
 
 import "context"
 
-// WriteRepo persists Project + Character + Environment + Plot inside a UoW tx.
-// All methods operate on the bound transaction.
+// WriteRepo persists Project + Character + Environment + Plot + global
+// SocialAccount inside a UoW tx. All methods operate on the bound
+// transaction.
 type WriteRepo interface {
 	// Project.
 	SaveProject(ctx context.Context, p *Project) error
@@ -27,9 +28,24 @@ type WriteRepo interface {
 	GetPlotByProject(ctx context.Context, projectID ProjectID) (*Plot, error)
 	DeletePlot(ctx context.Context, projectID ProjectID) error
 
-	// Social accounts.
+	// Social accounts (global).
 	SaveSocialAccount(ctx context.Context, a *SocialAccount) error
 	GetSocialAccount(ctx context.Context, id SocialAccountID) (*SocialAccount, error)
-	ListSocialAccounts(ctx context.Context, projectID ProjectID) ([]*SocialAccount, error)
+	ListAllSocialAccounts(ctx context.Context) ([]*SocialAccount, error)
 	DeleteSocialAccount(ctx context.Context, id SocialAccountID) error
+
+	// Project ↔ SocialAccount links.
+	LinkSocialAccount(ctx context.Context, projectID ProjectID, accountID SocialAccountID, asDefault bool) error
+	UnlinkSocialAccount(ctx context.Context, projectID ProjectID, accountID SocialAccountID) error
+	SetDefaultSocialAccount(ctx context.Context, projectID ProjectID, accountID SocialAccountID) error
+	ListProjectLinks(ctx context.Context, projectID ProjectID) ([]ProjectSocialAccountLink, error)
+	ListLinkedSocialAccounts(ctx context.Context, projectID ProjectID) ([]LinkedSocialAccount, error)
+}
+
+// LinkedSocialAccount bundles a SocialAccount with its is_default flag in a
+// project context. Returned by ListLinkedSocialAccounts so callers don't need
+// two queries.
+type LinkedSocialAccount struct {
+	Account   *SocialAccount
+	IsDefault bool
 }

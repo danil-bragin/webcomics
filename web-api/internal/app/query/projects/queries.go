@@ -17,6 +17,7 @@ type ReadModel interface {
 	GetEnvironment(ctx context.Context, id string) (EnvironmentView, error)
 	GetPlotByProject(ctx context.Context, projectID string) (*PlotView, error)
 	ListSocialAccounts(ctx context.Context, projectID string) ([]SocialAccountView, error)
+	ListAllSocialAccounts(ctx context.Context, filterPlatform string) ([]SocialAccountView, error)
 }
 
 type GetProject struct{ ID string }
@@ -59,4 +60,35 @@ func (h GetProjectDetailHandler) Handle(ctx context.Context, q GetProjectDetail)
 
 func GetProjectDetailOnBus(r *bus.Registry, m ReadModel) {
 	bus.RegisterQuery[GetProjectDetail, ProjectDetailView](r, GetProjectDetailHandler{m: m})
+}
+
+// ListProjectSocialAccounts returns the accounts LINKED to a project.
+type ListProjectSocialAccounts struct{ ProjectID string }
+
+func (ListProjectSocialAccounts) IsQuery() {}
+
+type ListProjectSocialAccountsHandler struct{ m ReadModel }
+
+func (h ListProjectSocialAccountsHandler) Handle(ctx context.Context, q ListProjectSocialAccounts) ([]SocialAccountView, error) {
+	return h.m.ListSocialAccounts(ctx, q.ProjectID)
+}
+
+func ListProjectSocialAccountsOnBus(r *bus.Registry, m ReadModel) {
+	bus.RegisterQuery[ListProjectSocialAccounts, []SocialAccountView](r, ListProjectSocialAccountsHandler{m: m})
+}
+
+// ListSocialAccountsGlobal returns the full library of accounts, optionally
+// filtered by platform.
+type ListSocialAccountsGlobal struct{ Platform string }
+
+func (ListSocialAccountsGlobal) IsQuery() {}
+
+type ListSocialAccountsGlobalHandler struct{ m ReadModel }
+
+func (h ListSocialAccountsGlobalHandler) Handle(ctx context.Context, q ListSocialAccountsGlobal) ([]SocialAccountView, error) {
+	return h.m.ListAllSocialAccounts(ctx, q.Platform)
+}
+
+func ListSocialAccountsGlobalOnBus(r *bus.Registry, m ReadModel) {
+	bus.RegisterQuery[ListSocialAccountsGlobal, []SocialAccountView](r, ListSocialAccountsGlobalHandler{m: m})
 }

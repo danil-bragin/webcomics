@@ -326,11 +326,17 @@ func UpsertPlotOnBus(r *bus.Registry, m uow.Manager) {
 	bus.RegisterCommand[UpsertPlot, UpsertPlotResult](r, NewUpsertPlotHandler(m))
 }
 
-// --- SocialAccount CRUD ---
+// --- SocialAccount CRUD (global) ---
 
+// UpsertSocialAccount creates or updates a global account row. Linking it
+// to projects is a separate concern (LinkSocialAccount). When cmd.ProjectID
+// is non-empty *and* this is a new account, the handler also links the
+// freshly-minted account to that project so the legacy Firefox flow keeps
+// "create + link in one step" UX.
 type UpsertSocialAccount struct {
 	ID                 string
-	ProjectID          string
+	ProjectID          string // optional — auto-link target on create
+	AsDefault          bool   // if ProjectID set + creating, mark this account default
 	Platform           string
 	Label              string
 	FirefoxProfilePath string
@@ -352,8 +358,9 @@ func (h *UpsertSocialAccountHandler) Handle(ctx context.Context, cmd UpsertSocia
 	err := h.uow.WithinTx(ctx, func(ctx context.Context, u uow.UnitOfWork) error {
 		repo := u.Repositories().Projects()
 		var a *projects.SocialAccount
-		if cmd.ID == "" {
-			created, err := projects.NewSocialAccount(projects.ProjectID(cmd.ProjectID), cmd.Platform, cmd.Label, cmd.FirefoxProfilePath, cmd.Extra)
+		isNew := cmd.ID == ""
+		if isNew {
+			created, err := projects.NewSocialAccount(cmd.Platform, cmd.Label, cmd.FirefoxProfilePath, cmd.Extra)
 			if err != nil {
 				return err
 			}
@@ -370,6 +377,11 @@ func (h *UpsertSocialAccountHandler) Handle(ctx context.Context, cmd UpsertSocia
 			return err
 		}
 		out.ID = a.ID().String()
+		if isNew && cmd.ProjectID != "" {
+			if err := repo.LinkSocialAccount(ctx, projects.ProjectID(cmd.ProjectID), a.ID(), cmd.AsDefault); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	return out, err
@@ -394,9 +406,94 @@ func (h *DeleteSocialAccountHandler) Handle(ctx context.Context, cmd DeleteSocia
 	return DeleteSocialAccountResult{}, err
 }
 
+// --- Project ↔ SocialAccount link CRUD ---
+
+type LinkSocialAccount struct {
+	ProjectID       string
+	SocialAccountID string
+	AsDefault       bool
+}
+
+func (LinkSocialAccount) IsCommand() {}
+
+type LinkSocialAccountResult struct{}
+
+type LinkSocialAccountHandler struct{ uow uow.Manager }
+
+func NewLinkSocialAccountHandler(m uow.Manager) *LinkSocialAccountHandler {
+	return &LinkSocialAccountHandler{uow: m}
+}
+
+func (h *LinkSocialAccountHandler) Handle(ctx context.Context, cmd LinkSocialAccount) (LinkSocialAccountResult, error) {
+	err := h.uow.WithinTx(ctx, func(ctx context.Context, u uow.UnitOfWork) error {
+		return u.Repositories().Projects().LinkSocialAccount(ctx,
+			projects.ProjectID(cmd.ProjectID),
+			projects.SocialAccountID(cmd.SocialAccountID),
+			cmd.AsDefault)
+	})
+	return LinkSocialAccountResult{}, err
+}
+
+type UnlinkSocialAccount struct {
+	ProjectID       string
+	SocialAccountID string
+}
+
+func (UnlinkSocialAccount) IsCommand() {}
+
+type UnlinkSocialAccountResult struct{}
+
+type UnlinkSocialAccountHandler struct{ uow uow.Manager }
+
+func NewUnlinkSocialAccountHandler(m uow.Manager) *UnlinkSocialAccountHandler {
+	return &UnlinkSocialAccountHandler{uow: m}
+}
+
+func (h *UnlinkSocialAccountHandler) Handle(ctx context.Context, cmd UnlinkSocialAccount) (UnlinkSocialAccountResult, error) {
+	err := h.uow.WithinTx(ctx, func(ctx context.Context, u uow.UnitOfWork) error {
+		return u.Repositories().Projects().UnlinkSocialAccount(ctx,
+			projects.ProjectID(cmd.ProjectID),
+			projects.SocialAccountID(cmd.SocialAccountID))
+	})
+	return UnlinkSocialAccountResult{}, err
+}
+
+type SetDefaultSocialAccount struct {
+	ProjectID       string
+	SocialAccountID string
+}
+
+func (SetDefaultSocialAccount) IsCommand() {}
+
+type SetDefaultSocialAccountResult struct{}
+
+type SetDefaultSocialAccountHandler struct{ uow uow.Manager }
+
+func NewSetDefaultSocialAccountHandler(m uow.Manager) *SetDefaultSocialAccountHandler {
+	return &SetDefaultSocialAccountHandler{uow: m}
+}
+
+func (h *SetDefaultSocialAccountHandler) Handle(ctx context.Context, cmd SetDefaultSocialAccount) (SetDefaultSocialAccountResult, error) {
+	err := h.uow.WithinTx(ctx, func(ctx context.Context, u uow.UnitOfWork) error {
+		return u.Repositories().Projects().SetDefaultSocialAccount(ctx,
+			projects.ProjectID(cmd.ProjectID),
+			projects.SocialAccountID(cmd.SocialAccountID))
+	})
+	return SetDefaultSocialAccountResult{}, err
+}
+
 func UpsertSocialAccountOnBus(r *bus.Registry, m uow.Manager) {
 	bus.RegisterCommand[UpsertSocialAccount, UpsertSocialAccountResult](r, NewUpsertSocialAccountHandler(m))
 }
 func DeleteSocialAccountOnBus(r *bus.Registry, m uow.Manager) {
 	bus.RegisterCommand[DeleteSocialAccount, DeleteSocialAccountResult](r, NewDeleteSocialAccountHandler(m))
+}
+func LinkSocialAccountOnBus(r *bus.Registry, m uow.Manager) {
+	bus.RegisterCommand[LinkSocialAccount, LinkSocialAccountResult](r, NewLinkSocialAccountHandler(m))
+}
+func UnlinkSocialAccountOnBus(r *bus.Registry, m uow.Manager) {
+	bus.RegisterCommand[UnlinkSocialAccount, UnlinkSocialAccountResult](r, NewUnlinkSocialAccountHandler(m))
+}
+func SetDefaultSocialAccountOnBus(r *bus.Registry, m uow.Manager) {
+	bus.RegisterCommand[SetDefaultSocialAccount, SetDefaultSocialAccountResult](r, NewSetDefaultSocialAccountHandler(m))
 }

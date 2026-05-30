@@ -8,7 +8,8 @@
     "templates": "Templates",
     "presets": "Presets",
     "formats": "Formats",
-    "audio": "Audio"
+    "audio": "Audio",
+    "social": "Social"
   },
   "common": {
     "save": "Save",

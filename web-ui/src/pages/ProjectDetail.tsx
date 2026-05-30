@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { RunCard } from "@/pages/RunsList";
+import { useToast } from "@/components/ui/toast";
 
 // Upload helper — POST to /api/uploads/presign, PUT bytes directly to MinIO,
 // return the asset_id that callers should attach to ref_asset_ids.
@@ -737,77 +738,123 @@ function SocialAccountsSection({ projectId, accounts }:
   { projectId: string; accounts: SocialAccountView[] }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const fxStatusQ = useQuery({ queryKey: ["fx-status"], queryFn: api.fxStatus, staleTime: 60_000 });
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [loginPlatform, setLoginPlatform] = useState(PLATFORMS[0].value);
-  const [loginLabel, setLoginLabel] = useState("");
+  const toast = useToast();
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const del = useMutation({
-    mutationFn: (id: string) => api.deleteSocialAccount(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["project", projectId] }),
+  // accounts here = LINKED accounts (the server returns join rows now).
+  const refresh = () => qc.invalidateQueries({ queryKey: ["project", projectId] });
+
+  const unlink = useMutation({
+    mutationFn: (id: string) => api.unlinkSocialAccount(projectId, id),
+    onSuccess: () => { refresh(); toast.push("success", t("social.unlinked", "Account unlinked")); },
+    onError: (e: Error) => toast.push("error", e.message),
   });
-
-  const fxEnabled = !!fxStatusQ.data?.enabled;
+  const setDefault = useMutation({
+    mutationFn: (id: string) => api.setDefaultSocialAccount(projectId, id),
+    onSuccess: () => { refresh(); toast.push("success", t("social.defaultSet", "Default updated")); },
+    onError: (e: Error) => toast.push("error", e.message),
+  });
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>{t("social.title")}</CardTitle>
-          <div className="flex items-center gap-2">
-            <select value={loginPlatform} onChange={(e) => setLoginPlatform(e.target.value)}
-              className="h-8 rounded border border-border bg-secondary/30 px-2 text-xs">
-              {PLATFORMS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-            <input value={loginLabel} onChange={(e) => setLoginLabel(e.target.value)}
-              placeholder={t("social.labelPlaceholder")}
-              className="h-8 rounded border border-border bg-secondary/30 px-2 text-xs w-44" />
-            <Button className="h-8 px-3 text-xs"
-              disabled={!fxEnabled || !loginLabel}
-              title={fxEnabled ? "" : t("social.fxDisabledTitle")}
-              onClick={() => setLoginOpen(true)}>
-              + {t("social.signInNew")}
-            </Button>
-          </div>
+          <CardTitle>{t("social.linkedTitle", "Linked social accounts")}</CardTitle>
+          <Button className="h-8 px-3 text-xs" onClick={() => setPickerOpen(true)}>
+            + {t("social.linkExisting", "Link account")}
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {!fxEnabled ? (
-          <p className="text-xs text-amber-500">
-            {t("social.embeddedDisabled")}
-          </p>
-        ) : null}
         {accounts.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            {t("social.noAccountsHint")}
+            {t("social.noLinksHint", "No accounts linked to this project yet. Link one from the global library, or open /social to connect a new one.")}
           </p>
-        ) : null}
-        <ul className="divide-y divide-border">
-          {accounts.map((a) => (
-            <li key={a.id} className="py-2 flex items-center gap-2 text-sm">
-              <span className="text-[10px] uppercase text-muted-foreground w-32">{a.platform}</span>
-              <span className="font-medium">{a.label || "—"}</span>
-              <code className="text-xs text-muted-foreground flex-1 truncate">{a.firefox_profile_path}</code>
-              <Button variant="outline" className="h-7 px-2 text-xs text-red-400" onClick={() => del.mutate(a.id)}>{t("common.delete")}</Button>
-            </li>
-          ))}
-        </ul>
-        {loginOpen ? (
-          <FxLoginDialog
+        ) : (
+          <ul className="divide-y divide-border">
+            {accounts.map((a) => (
+              <li key={a.id} className="py-2 flex items-center gap-2 text-sm">
+                <span className="text-[10px] uppercase text-muted-foreground w-32 shrink-0">{a.platform}</span>
+                <span className="font-medium flex items-center gap-1">
+                  {a.label || "—"}
+                  {a.is_default ? <span title="default" className="text-amber-400">★</span> : null}
+                </span>
+                <code className="text-xs text-muted-foreground flex-1 truncate">{a.firefox_profile_path}</code>
+                {!a.is_default ? (
+                  <Button variant="outline" className="h-7 px-2 text-[11px]" onClick={() => setDefault.mutate(a.id)}>
+                    {t("social.makeDefault", "set default")}
+                  </Button>
+                ) : null}
+                <Button variant="outline" className="h-7 px-2 text-[11px] text-red-400"
+                  onClick={() => unlink.mutate(a.id)}>{t("social.unlink", "unlink")}</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {pickerOpen ? (
+          <LinkAccountPicker
             projectId={projectId}
-            platform={loginPlatform}
-            label={loginLabel}
-            onClose={(saved) => {
-              setLoginOpen(false);
-              if (saved) {
-                setLoginLabel("");
-                qc.invalidateQueries({ queryKey: ["project", projectId] });
-              }
-            }}
+            alreadyLinked={new Set(accounts.map((a) => a.id))}
+            onClose={() => setPickerOpen(false)}
+            onLinked={() => { setPickerOpen(false); refresh(); toast.push("success", t("social.linked", "Account linked")); }}
           />
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+function LinkAccountPicker({ projectId, alreadyLinked, onClose, onLinked }: {
+  projectId: string;
+  alreadyLinked: Set<string>;
+  onClose: () => void;
+  onLinked: () => void;
+}) {
+  const { t } = useTranslation();
+  const all = useQuery<SocialAccountView[]>({
+    queryKey: ["social-accounts-global-picker"],
+    queryFn: () => api.listSocialAccountsGlobal(),
+  });
+  const link = useMutation({
+    mutationFn: (vars: { id: string; asDefault: boolean }) =>
+      api.linkSocialAccount(projectId, vars.id, vars.asDefault),
+    onSuccess: () => onLinked(),
+  });
+  const candidates = (all.data ?? []).filter((a) => !alreadyLinked.has(a.id));
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card border border-border rounded-lg w-full max-w-lg p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold">{t("social.linkPickerTitle", "Link account from library")}</h3>
+          <button onClick={onClose} className="text-sm opacity-60 hover:opacity-100">×</button>
+        </div>
+        {all.isLoading ? (
+          <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+        ) : candidates.length === 0 ? (
+          <div className="text-sm space-y-2">
+            <p className="text-muted-foreground">{t("social.noCandidates", "No global accounts left to link. All existing accounts are already linked to this project.")}</p>
+            <a href="/social" className="text-primary text-xs underline">{t("social.openLibrary", "Open social library →")}</a>
+          </div>
+        ) : (
+          <ul className="space-y-1 max-h-96 overflow-y-auto">
+            {candidates.map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-2 p-2 rounded border border-border">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{a.label || t("social.untitled", "untitled")}</p>
+                  <p className="text-[10px] text-muted-foreground">{a.platform} · {a.project_count ?? 0} projects · {a.upload_count ?? 0} uploads</p>
+                </div>
+                <Button variant="outline" className="h-7 px-2 text-[11px]" onClick={() => link.mutate({ id: a.id, asDefault: false })}>
+                  {t("social.linkBtn", "link")}
+                </Button>
+                <Button className="h-7 px-2 text-[11px]" onClick={() => link.mutate({ id: a.id, asDefault: true })}>
+                  {t("social.linkDefault", "link as default")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 

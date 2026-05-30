@@ -41,7 +41,22 @@ export type PlotView = components["schemas"]["PlotView"];
 export type PlotBody = components["schemas"]["PlotBody"];
 export type PlotBeatView = components["schemas"]["PlotBeatView"];
 export type FormatView = components["schemas"]["FormatView"];
-export type SocialAccountView = components["schemas"]["SocialAccountView"];
+// Phase 1 backend now returns more fields (status, defaults, link metadata)
+// than the OpenAPI schema declares; widen the TS type here until codegen
+// catches up.
+export type SocialAccountView = components["schemas"]["SocialAccountView"] & {
+  status?: "active" | "needs_relogin" | "banned" | "disabled";
+  last_used_at?: string | null;
+  cooldown_until?: string | null;
+  failure_streak?: number;
+  default_visibility?: string;
+  default_made_for_kids?: boolean;
+  default_category_id?: string;
+  default_category_label?: string;
+  is_default?: boolean;
+  project_count?: number;
+  upload_count?: number;
+};
 export type SocialAccountBody = components["schemas"]["SocialAccountBody"];
 
 async function request<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
@@ -235,9 +250,28 @@ export const api = {
     return request<PixabayResult[]>(`/api/audio/pixabay/search?${p.toString()}`);
   },
 
+  // Global social-accounts library (Phase 2). Project linking lives below.
+  listSocialAccountsGlobal: (platform?: string) =>
+    request<SocialAccountView[]>(`/api/social/accounts${platform ? `?platform=${encodeURIComponent(platform)}` : ""}`),
+  patchSocialAccount: (id: string, b: { platform?: string; label?: string; firefox_profile_path?: string; extra?: Record<string, unknown> }) =>
+    request<void>(`/api/social/accounts/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+  deleteSocialAccountGlobal: (id: string) =>
+    request<void>(`/api/social/accounts/${id}`, { method: "DELETE" }),
+
+  // Project ↔ account linking (Phase 3).
+  linkSocialAccount: (projectId: string, accountId: string, asDefault = false) =>
+    request<void>(`/api/projects/${projectId}/social-accounts/${accountId}/link`, {
+      method: "POST",
+      body: JSON.stringify({ as_default: asDefault }),
+    }),
+  unlinkSocialAccount: (projectId: string, accountId: string) =>
+    request<void>(`/api/projects/${projectId}/social-accounts/${accountId}/link`, { method: "DELETE" }),
+  setDefaultSocialAccount: (projectId: string, accountId: string) =>
+    request<void>(`/api/projects/${projectId}/social-accounts/${accountId}/default`, { method: "PUT" }),
+
   // Firefox-login orchestration (embedded social account auth).
   fxStatus: () => request<{ enabled: boolean }>("/api/firefox-login/status"),
-  fxStart: (b: { project_id: string; platform: string; label?: string }) =>
+  fxStart: (b: { project_id?: string; platform: string; label?: string }) =>
     request<FxSession>("/api/firefox-login/sessions", { method: "POST", body: JSON.stringify(b) }),
   fxGet: (id: string) => request<FxSession>(`/api/firefox-login/sessions/${id}`),
   fxFinish: (id: string, b: { label?: string } = {}) =>
