@@ -1,0 +1,1 @@
+"""Webcomics worker package."""

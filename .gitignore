@@ -1,0 +1,47 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# os
+.DS_Store
+
+# editor
+.vscode/
+.idea/
+
+# node
+node_modules/
+dist/
+build/
+*.log
+
+# go
+*.test
+*.out
+coverage.txt
+
+# python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# playwright artefacts
+.playwright-mcp/
+
+# screenshots / dev images
+*.png
+!docs/**/*.png
+
+# generated bundles cache
+.cache/
+
+# minio data
+miniodata/
+pgdata/
+redisdata/
+
+# scratch
+/tmp/
+*.bak

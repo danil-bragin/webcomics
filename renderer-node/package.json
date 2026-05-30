@@ -1,0 +1,29 @@
+{
+  "name": "webcomics-renderer",
+  "version": "0.1.0",
+  "description": "Remotion-based video assembler. Consumes pipeline.assemble.requested.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import tsx/esm src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "preview": "remotion preview src/Root.tsx"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.654.0",
+    "@remotion/bundler": "^4.0.300",
+    "@remotion/cli": "^4.0.300",
+    "@remotion/renderer": "^4.0.300",
+    "ioredis": "^5.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.300",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.0"
+  }
+}

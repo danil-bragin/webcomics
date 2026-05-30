@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package user.v1;
+option go_package = "github.com/example/dddcqrs/api/proto/userv1;userv1";
+
+// Skeleton contract. Generate Go via buf/protoc, then implement the server in
+// internal/interfaces/grpc by delegating each RPC to bus.Dispatch / bus.Ask.
+service UserService {
+  rpc RegisterUser(RegisterUserRequest) returns (RegisterUserResponse);
+  rpc GetUser(GetUserRequest) returns (UserView);
+}
+
+message RegisterUserRequest {
+  string email = 1;
+  string password = 2;
+}
+message RegisterUserResponse { string id = 1; }
+
+message GetUserRequest { string id = 1; }
+
+message UserView {
+  string id = 1;
+  string email = 2;
+  string status = 3;
+  string created_at = 4;
+}

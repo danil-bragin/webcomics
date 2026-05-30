@@ -1,0 +1,68 @@
+[
+  {
+    "id": "energetic-pop-01",
+    "title": "Sunset Vibes",
+    "object_key": "library/music/energetic-pop-01.mp3",
+    "duration_s": 30,
+    "bpm": 124,
+    "mood": ["upbeat", "happy", "summer"],
+    "genre": ["pop", "edm"],
+    "tempo": "fast",
+    "loop_friendly": true,
+    "license": "CC0",
+    "source": "pixabay",
+    "source_url": "https://pixabay.com/music/upbeat-energy-1234567"
+  },
+  {
+    "id": "comedic-bouncy-01",
+    "title": "Tip-Toe Mischief",
+    "object_key": "library/music/comedic-bouncy-01.mp3",
+    "duration_s": 28,
+    "bpm": 110,
+    "mood": ["playful", "comedic", "quirky"],
+    "genre": ["comedy", "cartoon"],
+    "tempo": "medium",
+    "loop_friendly": true,
+    "license": "CC0",
+    "source": "pixabay"
+  },
+  {
+    "id": "chill-lofi-01",
+    "title": "Late-night Brew",
+    "object_key": "library/music/chill-lofi-01.mp3",
+    "duration_s": 35,
+    "bpm": 84,
+    "mood": ["chill", "relaxed", "moody"],
+    "genre": ["lofi", "ambient"],
+    "tempo": "slow",
+    "loop_friendly": true,
+    "license": "CC0",
+    "source": "pixabay"
+  },
+  {
+    "id": "cinematic-build-01",
+    "title": "Rising Tide",
+    "object_key": "library/music/cinematic-build-01.mp3",
+    "duration_s": 40,
+    "bpm": 90,
+    "mood": ["epic", "dramatic", "tense"],
+    "genre": ["cinematic", "trailer"],
+    "tempo": "medium",
+    "loop_friendly": false,
+    "license": "CC0",
+    "source": "pixabay"
+  },
+  {
+    "id": "meme-hip-hop-01",
+    "title": "Block Party",
+    "object_key": "library/music/meme-hip-hop-01.mp3",
+    "duration_s": 32,
+    "bpm": 100,
+    "mood": ["confident", "swagger", "meme"],
+    "genre": ["hip-hop", "trap"],
+    "tempo": "medium",
+    "loop_friendly": true,
+    "license": "CC0",
+    "source": "pixabay"
+  }
+]

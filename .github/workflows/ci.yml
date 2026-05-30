@@ -1,0 +1,117 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+        ports: ["5433:5432"]
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+        ports: ["6380:6379"]
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports: ["9000:9000"]
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: web-api
+    env:
+      WRITE_DATABASE_URL: postgres://app:app@localhost:5433/app?sslmode=disable
+      REDIS_ADDR: localhost:6380
+      MINIO_ENDPOINT: localhost:9000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: web-api/go.sum
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test -race -count=1 ./...
+      - name: migrate-up
+        run: go run ./cmd/migrate -cmd up
+      - name: e2e (echo pipeline)
+        run: |
+          # CI variant of scripts/test-e2e.sh — assumes services already up
+          # and runs the binaries from go run.
+          set -euo pipefail
+          go run ./cmd/api > /tmp/api.log 2>&1 &
+          API_PID=$!
+          ECHO_PIPELINE=all go run ./cmd/consumer > /tmp/consumer.log 2>&1 &
+          CONS_PID=$!
+          go run ./cmd/outbox-relay > /tmp/relay.log 2>&1 &
+          RELAY_PID=$!
+          trap "kill $API_PID $CONS_PID $RELAY_PID 2>/dev/null || true" EXIT
+          for _ in {1..30}; do curl -sf http://localhost:8080/api/templates >/dev/null && break; sleep 1; done
+          TID=$(curl -sf -X POST http://localhost:8080/api/templates -H 'Content-Type: application/json' \
+            -d '{"name":"ci-1panel","steps":[{"type":"script","params":{"panel_count":1}},{"type":"image"},{"type":"assemble"}]}' \
+            | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+          RID=$(curl -sf -X POST http://localhost:8080/api/runs -H 'Content-Type: application/json' \
+            -d "{\"prompt\":\"ci\",\"template_id\":\"$TID\"}" \
+            | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+          for i in {1..30}; do
+            STATUS=$(curl -sf http://localhost:8080/api/runs/$RID | python3 -c 'import sys,json;print(json.load(sys.stdin)["status"])')
+            echo "  attempt $i: $STATUS"
+            case "$STATUS" in completed) break;; failed|cancelled) exit 1;; esac
+            sleep 1
+          done
+          test "$STATUS" = "completed"
+
+  ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web-ui/package-lock.json
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workers-py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install .
+      - run: python -c "import worker.main"  # import-smoke

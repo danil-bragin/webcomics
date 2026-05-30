@@ -1,0 +1,1205 @@
+openapi: 3.0.3
+info:
+  title: Webcomics Platform API
+  version: 0.1.0
+  description: |
+    HTTP API for the webcomics generation platform. Two route groups:
+      * `/users/*`  — user CRUD (boilerplate carry-over)
+      * `/api/*`    — pipeline runs, templates, assets
+
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      summary: List users
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/UserView' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: registerUser
+      summary: Register a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterUserRequest' }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IDResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      summary: Get a user
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /users/{id}/activate:
+    post:
+      operationId: activateUser
+      summary: Activate a pending user
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/runs:
+    get:
+      operationId: listRuns
+      summary: List pipeline runs
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50, maximum: 200 }
+        - in: query
+          name: offset
+          schema: { type: integer, default: 0 }
+        - in: query
+          name: status
+          description: Comma-separated status filter (e.g. "running,completed").
+          schema: { type: string }
+        - in: query
+          name: q
+          description: Case-insensitive substring match on the prompt.
+          schema: { type: string }
+        - in: query
+          name: project_id
+          description: Filter by project. Omit to include runs without a project too.
+          schema: { type: string }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RunSummary' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createRun
+      summary: Create and start a pipeline run
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRunRequest' }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IDResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/runs/cleanup:
+    post:
+      operationId: cleanupRuns
+      summary: Bulk-delete old terminal runs
+      description: |
+        Deletes runs older than `older_than_days` with one of the given
+        terminal statuses. Used by ops to keep the table bounded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CleanupRunsRequest' }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CleanupRunsResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/runs/{id}:
+    get:
+      operationId: getRun
+      summary: Get full run timeline
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/runs/{id}/events:
+    get:
+      operationId: streamRunEvents
+      summary: Server-Sent Events stream of run state changes
+      description: |
+        Emits `data: <RunView JSON>` events every time the run's status,
+        step statuses, panels_completed counters, or asset list changes.
+        Terminates when the run reaches a terminal state.
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/runs/{id}/retry:
+    post:
+      operationId: retryRun
+      summary: Re-run from the failed/cancelled run's template + prompt
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IDResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/runs/{id}/cancel:
+    post:
+      operationId: cancelRun
+      summary: Cancel a queued or running run
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/formats:
+    get:
+      operationId: listFormats
+      summary: List available visual+composition format presets.
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/FormatView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/projects:
+    get:
+      operationId: listProjects
+      summary: List projects
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProjectView' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createProject
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectBody' }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IDResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/projects/{id}:
+    get:
+      operationId: getProject
+      summary: Get a project detail (incl. characters/environments/plot)
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectDetailView' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      operationId: updateProject
+      summary: Update project name/description/archived
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectBody' }
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteProject
+      summary: Delete a project (cascades characters/environments/plot)
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/projects/{id}/characters:
+    post:
+      operationId: createCharacter
+      summary: Create a character in this project
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CharacterBody' }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IDResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/characters/{id}:
+    put:
+      operationId: updateCharacter
+      summary: Update a character
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CharacterBody' }
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteCharacter
+      summary: Delete a character
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/projects/{id}/environments:
+    post:
+      operationId: createEnvironment
+      summary: Create an environment in this project
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EnvironmentBody' }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IDResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/environments/{id}:
+    put:
+      operationId: updateEnvironment
+      summary: Update an environment
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EnvironmentBody' }
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteEnvironment
+      summary: Delete an environment
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/projects/{id}/social-accounts:
+    post:
+      operationId: createSocialAccount
+      summary: Create a social account in this project
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SocialAccountBody' }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IDResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/social-accounts/{id}:
+    put:
+      operationId: updateSocialAccount
+      summary: Update a social account
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SocialAccountBody' }
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteSocialAccount
+      summary: Delete a social account
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/projects/{id}/plot:
+    put:
+      operationId: upsertPlot
+      summary: Create or update the project's plot
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlotBody' }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IDResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/runs/{id}/steps/{idx}/regenerate:
+    post:
+      operationId: regenerateStep
+      summary: Start a new attempt for one step inside a run
+      description: |
+        Bumps the step's version, marks downstream steps stale, and emits the
+        matching *.requested event. Allowed on running, awaiting_action,
+        completed, and failed runs (cancelled is rejected).
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+        - in: path
+          name: idx
+          required: true
+          schema: { type: integer, minimum: 0 }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegenerateStepRequest' }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegenerateStepResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/runs/{id}/assemble:
+    post:
+      operationId: requestAssemble
+      summary: Trigger or re-trigger the assemble step
+      description: |
+        Used when auto_assemble=false to manually run the assemble step from an
+        awaiting_action run, or to re-render with new timeline params from a
+        completed/failed run.
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RequestAssembleRequest' }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RequestAssembleResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/templates:
+    get:
+      operationId: listTemplates
+      summary: List pipeline templates
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TemplateView' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createTemplate
+      summary: Create a template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TemplateBody' }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IDResponse' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/templates/{id}:
+    get:
+      operationId: getTemplate
+      summary: Get a template
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateView' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      operationId: updateTemplate
+      summary: Update a template
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TemplateBody' }
+      responses:
+        '204':
+          description: no content
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/stats:
+    get:
+      operationId: getStats
+      summary: Dashboard aggregates
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/balances:
+    get:
+      operationId: getBalances
+      summary: Live balances for the configured provider API keys
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BalancesView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /api/assets/{id}/url:
+    get:
+      operationId: getAssetUrl
+      summary: Get a presigned download URL for an asset
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PresignedAssetURL' }
+        default: { $ref: '#/components/responses/Error' }
+
+components:
+  parameters:
+    PathID:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+
+  responses:
+    Error:
+      description: error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+
+    IDResponse:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+
+    RegisterUserRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+
+    UserView:
+      type: object
+      required: [id, email, status, created_at]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        status: { type: string }
+        created_at: { type: string, format: date-time }
+
+    FormatView:
+      type: object
+      required: [id, name, scope]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        scope: { type: string }
+        script_system_suffix: { type: string }
+        image_prompt_prefix: { type: string }
+        image_prompt_suffix: { type: string }
+        image_model: { type: string }
+        style_reference: { type: string }
+        fps: { type: integer }
+        width: { type: integer }
+        height: { type: integer }
+        codec: { type: string }
+        panel_duration_ms: { type: integer }
+        transition: { type: string }
+
+    CreateRunRequest:
+      type: object
+      required: [prompt, template_id]
+      properties:
+        prompt: { type: string }
+        template_id: { type: string }
+        format_id:
+          type: string
+          description: Format preset id (e.g. "manga", "webtoon"). Overrides project default format.
+        project_id:
+          type: string
+          description: Optional. Attaches run to a project; characters/environments below select which ones influence this run.
+        character_ids:
+          type: array
+          description: Subset of the project's characters to apply.
+          items: { type: string }
+        environment_ids:
+          type: array
+          description: Subset of the project's environments to apply.
+          items: { type: string }
+        use_plot:
+          type: boolean
+          description: Include the project's plot premise+beats in script payload.
+        overrides: { $ref: '#/components/schemas/RunOverrides' }
+
+    RunOverrides:
+      type: object
+      description: |
+        Per-run tweaks applied on top of the chosen template. All fields are
+        optional. `steps` replaces the whole snapshot when present; the other
+        fields are convenience tweaks merged into the template's steps.
+      properties:
+        panel_count:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: Number of panels (overrides script step's params.panel_count).
+        target_duration_ms:
+          type: integer
+          minimum: 1000
+          maximum: 120000
+          description: Total final video length, distributed across panels.
+        enable_audio:
+          type: boolean
+          description: Insert an audio step between image and assemble.
+        system_prompt:
+          type: string
+          description: Override script step's system_prompt.
+        script_model:
+          type: string
+          description: Override script step's model.
+        image_model:
+          type: string
+          description: Override image step's model.
+        style_reference:
+          type: string
+          enum: [none, anchor, previous]
+          description: |
+            Image-step style consistency mode. none = parallel (current default);
+            anchor = panel 0 referenced by all later panels; previous = cumulative
+            (panel N references 0..N-1). Sequential modes require a ref-capable model.
+        auto_assemble:
+          type: boolean
+          description: |
+            When false the run pauses in awaiting_action state before the
+            assemble step instead of auto-rendering. The user then calls
+            POST /api/runs/{id}/assemble to render. Default true.
+        audio:
+          type: object
+          description: Audio step overrides (voice + model + speed). Applied when enable_audio=true.
+          properties:
+            voice_id: { type: string }
+            model: { type: string }
+            speed: { type: number, format: double, minimum: 0.5, maximum: 2.0 }
+        upload:
+          type: object
+          description: Auto-upload settings. Enables caption+upload steps after assemble.
+          properties:
+            enabled: { type: boolean }
+            provider: { type: string, description: youtube_selenium | twitter_selenium }
+            social_account_ids:
+              type: array
+              items: { type: string }
+            scheduled_at:
+              type: string
+              format: date-time
+              description: RFC3339; if in the future, worker waits.
+            caption_model: { type: string }
+            caption_override:
+              type: string
+              description: Skip LLM, use this caption for all platforms.
+            platforms:
+              type: array
+              items: { type: string }
+        assemble:
+          type: object
+          description: Assemble step overrides (fps + resolution + codec).
+          properties:
+            fps: { type: integer, minimum: 1, maximum: 120 }
+            width: { type: integer, minimum: 120 }
+            height: { type: integer, minimum: 120 }
+            codec: { type: string, enum: [h264, h265] }
+        steps:
+          type: array
+          description: Full step override (replaces template snapshot when non-empty).
+          items: { $ref: '#/components/schemas/StepConfig' }
+
+    RegenerateStepRequest:
+      type: object
+      description: Optional params override merged into the step's snapshot params.
+      properties:
+        params:
+          type: object
+          additionalProperties: true
+
+    RegenerateStepResponse:
+      type: object
+      required: [run_id, step_index, new_version]
+      properties:
+        run_id: { type: string }
+        step_index: { type: integer }
+        new_attempt_id: { type: string }
+        new_version: { type: integer }
+
+    RequestAssembleRequest:
+      type: object
+      description: Optional params override (fps, panel_duration_ms, transition, timeline).
+      properties:
+        params:
+          type: object
+          additionalProperties: true
+
+    RequestAssembleResponse:
+      type: object
+      required: [run_id, step_index]
+      properties:
+        run_id: { type: string }
+        step_index: { type: integer }
+
+    StepConfig:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [script, image, audio, music, assemble, upload]
+        system_prompt: { type: string }
+        model: { type: string }
+        provider: { type: string }
+        params:
+          type: object
+          additionalProperties: true
+
+    TemplateBody:
+      type: object
+      required: [name, steps]
+      properties:
+        name: { type: string }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/StepConfig' }
+        max_cost_usd:
+          description: Maximum spend allowed per run from this template. 0 = unlimited.
+          type: number
+          format: double
+          default: 0
+
+    TemplateView:
+      type: object
+      required: [id, name, steps, max_cost_usd, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        steps:
+          description: jsonb step list
+          type: array
+          items: { $ref: '#/components/schemas/StepConfig' }
+        max_cost_usd:
+          description: 0 means unlimited.
+          type: number
+          format: double
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    RunSummary:
+      type: object
+      required: [id, template_id, prompt, status, total_cost_usd, created_at]
+      properties:
+        id: { type: string }
+        template_id: { type: string }
+        prompt: { type: string }
+        status: { type: string }
+        total_cost_usd: { type: number, format: double }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        video_asset_id:
+          type: string
+          description: ID of the final assembled video asset, if one was produced.
+
+    StepView:
+      type: object
+      required: [id, index, type, status, current_version, is_stale, panels_expected, panels_completed, cost_usd, attempts]
+      properties:
+        id: { type: string }
+        index: { type: integer }
+        type: { type: string }
+        status: { type: string }
+        current_version: { type: integer, description: 1-based attempt counter — bumped on each regenerate. }
+        is_stale:
+          type: boolean
+          description: True when an upstream attempt advanced past the version this step's active attempt consumed.
+        active_attempt_id: { type: string }
+        input:
+          type: object
+          additionalProperties: true
+          nullable: true
+        outputs:
+          description: jsonb array (semantics depend on step type)
+          nullable: true
+        provider: { type: string }
+        model: { type: string }
+        cost_usd: { type: number, format: double }
+        panels_expected: { type: integer }
+        panels_completed: { type: integer }
+        error: { type: string }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        attempts:
+          type: array
+          description: Full version history of this step. attempts[len-1] = newest.
+          items: { $ref: '#/components/schemas/AttemptView' }
+
+    AttemptView:
+      type: object
+      required: [id, step_id, attempt_no, status, panels_expected, panels_completed, cost_usd, created_at]
+      properties:
+        id: { type: string }
+        step_id: { type: string }
+        attempt_no: { type: integer }
+        status: { type: string }
+        input:
+          type: object
+          additionalProperties: true
+          nullable: true
+        outputs:
+          description: jsonb array
+          nullable: true
+        params_override:
+          type: object
+          additionalProperties: true
+          nullable: true
+        upstream_versions:
+          description: |
+            Map of upstream step_index -> version this attempt consumed.
+            Lets the UI explain why a step is stale.
+          type: object
+          additionalProperties: { type: integer }
+          nullable: true
+        provider: { type: string }
+        model: { type: string }
+        cost_usd: { type: number, format: double }
+        panels_expected: { type: integer }
+        panels_completed: { type: integer }
+        error: { type: string }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    AssetView:
+      type: object
+      required: [id, kind, bucket, object_key, mime, bytes, created_at]
+      properties:
+        id: { type: string }
+        step_id: { type: string }
+        attempt_id: { type: string }
+        kind: { type: string }
+        bucket: { type: string }
+        object_key: { type: string }
+        mime: { type: string }
+        bytes: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+
+    CostEntryView:
+      type: object
+      required: [id, provider, total_cost_usd, occurred_at]
+      properties:
+        id: { type: string }
+        step_id: { type: string }
+        attempt_id: { type: string }
+        provider: { type: string }
+        model: { type: string }
+        units: { type: number, format: double }
+        unit_label: { type: string }
+        unit_cost_usd: { type: number, format: double }
+        total_cost_usd: { type: number, format: double }
+        occurred_at: { type: string, format: date-time }
+
+    RunView:
+      type: object
+      required: [id, prompt, status, current_step_index, expected_steps, auto_assemble, total_cost_usd, max_cost_usd, created_at, steps]
+      properties:
+        id: { type: string }
+        template_id: { type: string }
+        prompt: { type: string }
+        status:
+          type: string
+          description: queued | running | awaiting_action | completed | failed | cancelled
+        current_step_index: { type: integer }
+        expected_steps: { type: integer }
+        auto_assemble: { type: boolean }
+        total_cost_usd: { type: number, format: double }
+        max_cost_usd:
+          description: 0 means unlimited.
+          type: number
+          format: double
+        error: { type: string }
+        config_snapshot:
+          type: array
+          items: { $ref: '#/components/schemas/StepConfig' }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/StepView' }
+        assets:
+          type: array
+          items: { $ref: '#/components/schemas/AssetView' }
+        cost_entries:
+          type: array
+          items: { $ref: '#/components/schemas/CostEntryView' }
+
+    CleanupRunsRequest:
+      type: object
+      required: [older_than_days]
+      properties:
+        older_than_days:
+          type: integer
+          minimum: 1
+          description: Delete runs whose created_at is more than N days old.
+        statuses:
+          type: array
+          description: Only delete runs in these terminal statuses. Default = [completed, failed, cancelled].
+          items: { type: string }
+
+    CleanupRunsResponse:
+      type: object
+      required: [deleted]
+      properties:
+        deleted: { type: integer }
+
+    Provider:
+      type: object
+      required: [name, currency, used, limit, remaining, unit_label]
+      properties:
+        name: { type: string }
+        currency: { type: string }
+        used: { type: number, format: double }
+        limit: { type: number, format: double }
+        remaining: { type: number, format: double }
+        unit_label: { type: string }
+        reset_unix: { type: integer, format: int64 }
+        error: { type: string }
+
+    BalancesView:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items: { $ref: '#/components/schemas/Provider' }
+
+    PresignedAssetURL:
+      type: object
+      required: [url, mime]
+      properties:
+        url: { type: string, format: uri }
+        mime: { type: string }
+
+    ProviderCost:
+      type: object
+      required: [provider, total_cost_usd]
+      properties:
+        provider: { type: string }
+        total_cost_usd: { type: number, format: double }
+
+    DayCost:
+      type: object
+      required: [date, total_cost_usd]
+      properties:
+        date: { type: string, format: date }
+        total_cost_usd: { type: number, format: double }
+
+    StatsView:
+      type: object
+      required: [runs_by_status, total_cost_usd, cost_by_provider, cost_by_day]
+      properties:
+        runs_by_status:
+          type: object
+          additionalProperties: { type: integer }
+        total_cost_usd: { type: number, format: double }
+        cost_by_provider:
+          type: array
+          items: { $ref: '#/components/schemas/ProviderCost' }
+        cost_by_day:
+          type: array
+          items: { $ref: '#/components/schemas/DayCost' }
+
+    ProjectBody:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        defaults:
+          description: Default Studio overrides hydrated when this project is picked.
+          type: object
+          additionalProperties: true
+        archived: { type: boolean }
+
+    ProjectView:
+      type: object
+      required: [id, name, description, defaults, archived, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        defaults:
+          type: object
+          additionalProperties: true
+        archived: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CharacterBody:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        traits:
+          type: object
+          additionalProperties: true
+        ref_asset_ids:
+          type: array
+          items: { type: string }
+
+    CharacterView:
+      type: object
+      required: [id, project_id, name, description, traits, ref_asset_ids, created_at, updated_at]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        traits:
+          type: object
+          additionalProperties: true
+        ref_asset_ids:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    EnvironmentBody:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        traits:
+          type: object
+          additionalProperties: true
+        ref_asset_ids:
+          type: array
+          items: { type: string }
+
+    EnvironmentView:
+      type: object
+      required: [id, project_id, name, description, traits, ref_asset_ids, created_at, updated_at]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        traits:
+          type: object
+          additionalProperties: true
+        ref_asset_ids:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SocialAccountBody:
+      type: object
+      required: [platform]
+      properties:
+        platform: { type: string, description: youtube_selenium | twitter_selenium | ... }
+        label: { type: string }
+        firefox_profile_path: { type: string }
+        extra:
+          type: object
+          additionalProperties: true
+
+    SocialAccountView:
+      type: object
+      required: [id, project_id, platform, label, firefox_profile_path, extra, created_at, updated_at]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        platform: { type: string }
+        label: { type: string }
+        firefox_profile_path: { type: string }
+        extra:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PlotBeatView:
+      type: object
+      required: [name, description, order]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        order: { type: integer }
+
+    PlotView:
+      type: object
+      required: [id, project_id, name, premise, beats, created_at, updated_at]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        name: { type: string }
+        premise: { type: string }
+        beats:
+          type: array
+          items: { $ref: '#/components/schemas/PlotBeatView' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PlotBody:
+      type: object
+      properties:
+        name: { type: string }
+        premise: { type: string }
+        beats:
+          type: array
+          items: { $ref: '#/components/schemas/PlotBeatView' }
+
+    ProjectDetailView:
+      type: object
+      required: [project, characters, environments, social_accounts]
+      properties:
+        project: { $ref: '#/components/schemas/ProjectView' }
+        characters:
+          type: array
+          items: { $ref: '#/components/schemas/CharacterView' }
+        environments:
+          type: array
+          items: { $ref: '#/components/schemas/EnvironmentView' }
+        social_accounts:
+          type: array
+          items: { $ref: '#/components/schemas/SocialAccountView' }
+        plot:
+          allOf:
+            - { $ref: '#/components/schemas/PlotView' }
+          nullable: true
