@@ -201,13 +201,16 @@ function VideoTile({ assetId, status }: { assetId?: string; status: string }) {
     return () => { alive = false; };
   }, [assetId]);
 
-  // Seek a hair past 0 to force first-frame paint — many browsers (Safari,
-  // Chromium occasionally) show black until decode begins.
+  // Seek ~1s in: the renderer starts every comic with a ~280ms crossfade
+  // from black, so a 0.1s poster lands mid fade-in and looks like the
+  // thumbnail itself was dimmed. 1s is safely past the fade and still on
+  // the first panel for any reasonable panel duration.
   const onLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
+    const target = Math.min(1, Math.max(0.1, (v.duration || 2) * 0.25));
     try {
-      v.currentTime = 0.1;
+      v.currentTime = target;
     } catch {}
   };
 
