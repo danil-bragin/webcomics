@@ -493,6 +493,12 @@
     "panXEnd": "pan x end",
     "panYEnd": "pan y end",
     "caption": "Caption",
-    "captionEmpty": "(empty = no caption)"
+    "captionEmpty": "(empty = no caption)",
+    "trackTitle": "Timeline",
+    "trackHint": "Each tile's width equals its duration. Coloured seams are transitions — click a tile to edit it below.",
+    "preview": "Preview (draft)",
+    "previewHint": "Quick low-res draft to verify the cut before committing the full render.",
+    "renderFinal": "Render final",
+    "swapSourceHint": "Click another tile on the track to edit it. Use ‹ › to reorder."
   }
 }

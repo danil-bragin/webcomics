@@ -1,30 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  rectSortingStrategy,
-  sortableKeyboardCoordinates,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 import { api, type RunView, type AssetView } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { RESOLUTION_PRESETS, FPS_PRESETS } from "@/lib/options";
+
+type TransitionType = "none" | "fade" | "crossfade" | "slide" | "push" | "zoom" | "wipe";
+type EasingName = "linear" | "ease-in" | "ease-out" | "ease-in-out" | "cubic";
+type Direction = "left" | "right" | "up" | "down";
 
 type Panel = {
   image_panel_index: number;
@@ -39,15 +26,23 @@ type Panel = {
   caption: { text: string; position: "top" | "bottom" | "center" };
 };
 
-type TransitionType = "none" | "fade" | "crossfade" | "slide" | "push" | "zoom" | "wipe";
-type EasingName = "linear" | "ease-in" | "ease-out" | "ease-in-out" | "cubic";
-type Direction = "left" | "right" | "up" | "down";
-
 const TRANSITIONS: TransitionType[] = ["none", "fade", "crossfade", "slide", "push", "zoom", "wipe"];
 const EASINGS: EasingName[] = ["linear", "ease-in", "ease-out", "ease-in-out", "cubic"];
 const DIRECTIONS: Direction[] = ["left", "right", "up", "down"];
 
-import { RESOLUTION_PRESETS, FPS_PRESETS } from "@/lib/options";
+// Colour each transition type so the seam between two clips reads at a glance.
+const TRANSITION_COLOR: Record<TransitionType, string> = {
+  none: "bg-zinc-700",
+  fade: "bg-amber-500",
+  crossfade: "bg-emerald-500",
+  slide: "bg-sky-500",
+  push: "bg-indigo-500",
+  zoom: "bg-fuchsia-500",
+  wipe: "bg-orange-500",
+};
+
+const MIN_PANEL_PX = 80;
+const PX_PER_SECOND = 60;
 
 function defaultPanel(index: number, durationMs: number, caption: string): Panel {
   return {
@@ -70,69 +65,187 @@ function useAssetURL(assetId: string | undefined) {
   return url;
 }
 
-function PanelThumb({ asset, label }: { asset?: AssetView; label: string }) {
+function TrackTile({
+  panel, idx, asset, selected, widthPx, onSelect, onShift,
+}: {
+  panel: Panel;
+  idx: number;
+  asset?: AssetView;
+  selected: boolean;
+  widthPx: number;
+  onSelect: () => void;
+  onShift: (delta: number) => void;
+}) {
   const url = useAssetURL(asset?.id);
+  const seconds = (panel.duration_ms / 1000).toFixed(1);
   return (
-    <div className="aspect-square w-full rounded border border-border overflow-hidden bg-secondary/30 relative">
-      {url ? <img src={url} className="w-full h-full object-cover" /> : <div className="w-full h-full animate-pulse" />}
-      <span className="absolute top-1 left-1 text-[10px] bg-black/60 text-white px-1 rounded">{label}</span>
+    <div
+      onClick={onSelect}
+      className={`group relative shrink-0 h-24 rounded overflow-hidden border cursor-pointer transition-shadow ${
+        selected ? "border-primary ring-2 ring-primary/40" : "border-border hover:border-primary/60"
+      }`}
+      style={{ width: `${Math.max(MIN_PANEL_PX, widthPx)}px` }}
+      title={`#${panel.image_panel_index} · ${seconds}s`}
+    >
+      {url ? (
+        <img src={url} className="absolute inset-0 w-full h-full object-cover" alt="" />
+      ) : (
+        <div className="absolute inset-0 bg-secondary/40 animate-pulse" />
+      )}
+      <div className="absolute inset-x-0 top-0 px-1.5 py-0.5 bg-gradient-to-b from-black/70 to-transparent flex items-center justify-between text-[10px] text-white">
+        <span className="tabular-nums">#{idx + 1}</span>
+        <span className="tabular-nums">{seconds}s</span>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => { e.stopPropagation(); onShift(-1); }}
+          className="px-1.5 py-0.5 text-[10px] bg-black/60 text-white"
+          title="move left"
+          disabled={idx === 0}
+        >‹</button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onShift(1); }}
+          className="px-1.5 py-0.5 text-[10px] bg-black/60 text-white"
+          title="move right"
+        >›</button>
+      </div>
     </div>
   );
 }
 
-function SortablePanel({ p, idx, asset, onChange, onRemove }:
-  { p: Panel; idx: number; asset?: AssetView; onChange: (next: Panel) => void; onRemove: () => void }) {
-  const { t } = useTranslation();
-  const id = `panel-${idx}-${p.image_panel_index}`;
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+function TransitionSeam({ panel }: { panel: Panel }) {
+  const t = panel.transition_in;
+  const ms = t.duration_ms;
+  // Width scales with transition duration so a long crossfade reads visibly
+  // wider than a snap cut. Caps at ~30px so it doesn't dominate the track.
+  const w = Math.min(30, Math.max(8, ms / 25));
   return (
-    <div ref={setNodeRef} style={style} className="rounded border border-border bg-card p-3 space-y-2">
+    <div
+      className={`shrink-0 h-24 ${TRANSITION_COLOR[t.type]} opacity-80 flex items-center justify-center text-[9px] text-white/90`}
+      style={{ width: `${w}px` }}
+      title={`${t.type} ${ms}ms ${t.easing}`}
+    >
+      {t.type === "none" ? "|" : t.type[0].toUpperCase()}
+    </div>
+  );
+}
+
+function TimeRuler({ totalMs }: { totalMs: number }) {
+  const seconds = Math.ceil(totalMs / 1000);
+  const ticks: number[] = [];
+  for (let i = 0; i <= seconds; i++) ticks.push(i);
+  return (
+    <div
+      className="relative h-5 border-b border-border/60"
+      style={{ width: `${seconds * PX_PER_SECOND}px`, minWidth: "100%" }}
+    >
+      {ticks.map((s) => (
+        <div
+          key={s}
+          className="absolute top-0 bottom-0 border-l border-border/40 text-[9px] text-muted-foreground pl-0.5 tabular-nums"
+          style={{ left: `${s * PX_PER_SECOND}px` }}
+        >
+          {s}s
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PanelInspector({
+  panel, sourceCount, onChange, onRemove,
+}: {
+  panel: Panel;
+  sourceCount: number;
+  onChange: (next: Panel) => void;
+  onRemove: () => void;
+}) {
+  const { t } = useTranslation();
+  const t_in = panel.transition_in;
+  const eff = panel.effects[0] ?? defaultPanel(0, 0, "").effects[0];
+  return (
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button {...attributes} {...listeners} className="cursor-grab text-muted-foreground text-xs">⋮⋮</button>
-          <Badge variant="info">{t("timeline.slot", { idx: idx + 1 })}</Badge>
-          <span className="text-[10px] text-muted-foreground">{t("timeline.sourcePanel", { idx: p.image_panel_index })}</span>
-        </div>
-        <Button variant="outline" className="h-6 px-2 text-[10px]" onClick={onRemove}>{t("timeline.remove")}</Button>
+        <h3 className="text-sm font-medium">
+          {t("timeline.slot", { idx: panel.image_panel_index + 1 })} ·{" "}
+          <span className="text-muted-foreground">{t("timeline.sourcePanel", { idx: panel.image_panel_index })}</span>
+        </h3>
+        <Button variant="outline" className="h-7 px-2 text-xs" onClick={onRemove}>
+          {t("timeline.remove")}
+        </Button>
       </div>
-      <PanelThumb asset={asset} label={`#${p.image_panel_index}`} />
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <NumField label={t("timeline.durationMs")} value={p.duration_ms} min={500} max={20000} step={100}
-          onChange={(v) => onChange({ ...p, duration_ms: v })} />
-        <SelectField label={t("studio.transition")} value={p.transition_in.type} options={TRANSITIONS}
-          onChange={(v) => onChange({ ...p, transition_in: { ...p.transition_in, type: v as TransitionType } })} />
-        <NumField label={t("timeline.transDurationMs")} value={p.transition_in.duration_ms} min={0} max={2000} step={20}
-          onChange={(v) => onChange({ ...p, transition_in: { ...p.transition_in, duration_ms: v } })} />
-        <SelectField label={t("timeline.easing")} value={p.transition_in.easing} options={EASINGS}
-          onChange={(v) => onChange({ ...p, transition_in: { ...p.transition_in, easing: v as EasingName } })} />
-        <SelectField label={t("timeline.direction")} value={p.transition_in.direction} options={DIRECTIONS}
-          onChange={(v) => onChange({ ...p, transition_in: { ...p.transition_in, direction: v as Direction } })} />
-      </div>
-      <details className="text-xs">
-        <summary className="cursor-pointer text-muted-foreground">{t("timeline.kenBurns")}</summary>
-        <div className="mt-1 grid grid-cols-2 gap-2">
-          <NumField label={t("timeline.zoomStart")} value={p.effects[0]?.zoom_start ?? 1.0} min={0.5} max={2} step={0.01}
-            onChange={(v) => onChange({ ...p, effects: [{ ...(p.effects[0] ?? defaultPanel(0,0,"").effects[0]), zoom_start: v }] })} />
-          <NumField label={t("timeline.zoomEnd")} value={p.effects[0]?.zoom_end ?? 1.08} min={0.5} max={2} step={0.01}
-            onChange={(v) => onChange({ ...p, effects: [{ ...(p.effects[0] ?? defaultPanel(0,0,"").effects[0]), zoom_end: v }] })} />
-          <NumField label={t("timeline.panXEnd")} value={p.effects[0]?.pan_x_end ?? 0} min={-200} max={200} step={1}
-            onChange={(v) => onChange({ ...p, effects: [{ ...(p.effects[0] ?? defaultPanel(0,0,"").effects[0]), pan_x_end: v }] })} />
-          <NumField label={t("timeline.panYEnd")} value={p.effects[0]?.pan_y_end ?? -10} min={-200} max={200} step={1}
-            onChange={(v) => onChange({ ...p, effects: [{ ...(p.effects[0] ?? defaultPanel(0,0,"").effects[0]), pan_y_end: v }] })} />
+
+      <section className="space-y-1.5">
+        <h4 className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("timeline.durationMs")}</h4>
+        <input
+          type="range" min={500} max={10000} step={100}
+          value={panel.duration_ms}
+          onChange={(e) => onChange({ ...panel, duration_ms: Number(e.target.value) })}
+          className="w-full"
+        />
+        <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+          <span>0.5s</span>
+          <span className="font-medium text-foreground">{(panel.duration_ms / 1000).toFixed(1)}s</span>
+          <span>10s</span>
         </div>
-      </details>
-      <details className="text-xs">
-        <summary className="cursor-pointer text-muted-foreground">{t("timeline.caption")}</summary>
-        <div className="mt-1 space-y-1">
-          <Textarea rows={2} value={p.caption.text}
-            onChange={(e) => onChange({ ...p, caption: { ...p.caption, text: e.target.value } })}
-            placeholder={t("timeline.captionEmpty")}
-            className="font-mono text-[10px]" />
-          <SelectField label={t("projectDefaults.position")} value={p.caption.position} options={["top","bottom","center"]}
-            onChange={(v) => onChange({ ...p, caption: { ...p.caption, position: v as Panel["caption"]["position"] } })} />
+      </section>
+
+      <section className="space-y-1.5">
+        <h4 className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("studio.transition")}</h4>
+        <div className="grid grid-cols-4 gap-1">
+          {TRANSITIONS.map((tt) => (
+            <button
+              key={tt}
+              onClick={() => onChange({ ...panel, transition_in: { ...t_in, type: tt } })}
+              className={`h-7 rounded text-[10px] border ${
+                t_in.type === tt ? `${TRANSITION_COLOR[tt]} text-white border-transparent` : "border-border hover:border-primary/60"
+              }`}
+            >
+              {tt}
+            </button>
+          ))}
         </div>
-      </details>
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <NumField label={t("timeline.transDurationMs")} value={t_in.duration_ms} min={0} max={2000} step={20}
+            onChange={(v) => onChange({ ...panel, transition_in: { ...t_in, duration_ms: v } })} />
+          <SelectField label={t("timeline.easing")} value={t_in.easing} options={EASINGS}
+            onChange={(v) => onChange({ ...panel, transition_in: { ...t_in, easing: v as EasingName } })} />
+          {(t_in.type === "slide" || t_in.type === "push" || t_in.type === "wipe") ? (
+            <SelectField label={t("timeline.direction")} value={t_in.direction} options={DIRECTIONS}
+              onChange={(v) => onChange({ ...panel, transition_in: { ...t_in, direction: v as Direction } })} />
+          ) : null}
+        </div>
+      </section>
+
+      <section className="space-y-1.5">
+        <h4 className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("timeline.kenBurns")}</h4>
+        <div className="grid grid-cols-2 gap-2">
+          <NumField label={t("timeline.zoomStart")} value={eff.zoom_start} min={0.5} max={2} step={0.01}
+            onChange={(v) => onChange({ ...panel, effects: [{ ...eff, zoom_start: v }] })} />
+          <NumField label={t("timeline.zoomEnd")} value={eff.zoom_end} min={0.5} max={2} step={0.01}
+            onChange={(v) => onChange({ ...panel, effects: [{ ...eff, zoom_end: v }] })} />
+          <NumField label={t("timeline.panXEnd")} value={eff.pan_x_end} min={-200} max={200} step={1}
+            onChange={(v) => onChange({ ...panel, effects: [{ ...eff, pan_x_end: v }] })} />
+          <NumField label={t("timeline.panYEnd")} value={eff.pan_y_end} min={-200} max={200} step={1}
+            onChange={(v) => onChange({ ...panel, effects: [{ ...eff, pan_y_end: v }] })} />
+        </div>
+      </section>
+
+      <section className="space-y-1.5">
+        <h4 className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("timeline.caption")}</h4>
+        <Textarea rows={2} value={panel.caption.text}
+          onChange={(e) => onChange({ ...panel, caption: { ...panel.caption, text: e.target.value } })}
+          placeholder={t("timeline.captionEmpty")}
+          className="font-mono text-[11px]" />
+        <SelectField label={t("projectDefaults.position")} value={panel.caption.position} options={["top", "bottom", "center"]}
+          onChange={(v) => onChange({ ...panel, caption: { ...panel.caption, position: v as Panel["caption"]["position"] } })} />
+      </section>
+
+      {sourceCount > 1 ? (
+        <p className="text-[10px] text-muted-foreground pt-2 border-t border-border/40">
+          {t("timeline.swapSourceHint", "Click another tile on the track to edit it. Use ‹ › to reorder.")}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -166,6 +279,7 @@ export function TimelineEditor() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const q = useQuery<RunView>({ queryKey: ["run", id], queryFn: () => api.getRun(id) });
 
   const [panels, setPanels] = useState<Panel[]>([]);
@@ -173,10 +287,10 @@ export function TimelineEditor() {
   const [resolution, setResolution] = useState(RESOLUTION_PRESETS[0]);
   const [codec, setCodec] = useState<"h264" | "h265">("h264");
   const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState(0);
 
-  // Seed panel rows from run state on first load.
   const sourcePanels = useMemo(() => {
-    if (!q.data) return [] as { index: number; objectKey: string; caption: string; assetId?: string }[];
+    if (!q.data) return [] as { index: number; objectKey: string; caption: string; assetId?: string; defaultDur: number }[];
     const imageStep = q.data.steps.find((s) => s.type === "image");
     const scriptStep = q.data.steps.find((s) => s.type === "script");
     const assemble = q.data.steps.find((s) => s.type === "assemble");
@@ -193,7 +307,7 @@ export function TimelineEditor() {
 
   useEffect(() => {
     if (panels.length > 0 || sourcePanels.length === 0) return;
-    setPanels(sourcePanels.map((p) => defaultPanel(p.index, (p as any).defaultDur ?? 2500, p.caption)));
+    setPanels(sourcePanels.map((p) => defaultPanel(p.index, p.defaultDur ?? 2500, p.caption)));
     const assemble = q.data?.steps.find((s) => s.type === "assemble");
     const input: any = assemble?.input ?? {};
     if (input.fps) setFps(Number(input.fps));
@@ -203,18 +317,22 @@ export function TimelineEditor() {
     }
   }, [sourcePanels, panels.length, q.data]);
 
-  const submit = useMutation({
-    mutationFn: () => {
-      const body = {
+  const renderMut = useMutation({
+    mutationFn: (mode: "preview" | "final") => {
+      const isPreview = mode === "preview";
+      // Preview shrinks the final dimensions ~half and forces h264 so the
+      // user gets a draft in 1/3 the time before committing the full render.
+      const w = isPreview ? Math.round(resolution.w / 2) : resolution.w;
+      const h = isPreview ? Math.round(resolution.h / 2) : resolution.h;
+      return api.requestAssemble(id, {
         params: {
-          fps,
-          width: resolution.w,
-          height: resolution.h,
-          codec,
+          fps: isPreview ? Math.min(fps, 24) : fps,
+          width: w, height: h,
+          codec: isPreview ? "h264" : codec,
           timeline: { panels },
+          preview: isPreview ? true : undefined,
         },
-      };
-      return api.requestAssemble(id, body as any);
+      } as any);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["run", id] });
@@ -223,88 +341,130 @@ export function TimelineEditor() {
     onError: (e: Error) => setSubmitErr(e.message),
   });
 
-  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
-  const onDragEnd = (e: DragEndEvent) => {
-    if (!e.over || e.active.id === e.over.id) return;
+  const shift = (i: number, delta: number) => {
     setPanels((curr) => {
-      const oldIdx = curr.findIndex((p, i) => `panel-${i}-${p.image_panel_index}` === e.active.id);
-      const newIdx = curr.findIndex((p, i) => `panel-${i}-${p.image_panel_index}` === e.over!.id);
-      if (oldIdx < 0 || newIdx < 0) return curr;
-      return arrayMove(curr, oldIdx, newIdx);
+      const next = [...curr];
+      const j = i + delta;
+      if (j < 0 || j >= next.length) return curr;
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
     });
+    setSelectedIdx((s) => (s === i ? i + delta : s === i + delta ? i : s));
   };
 
-  const totalDur = panels.reduce((sum, p) => sum + p.duration_ms, 0);
-  const items = panels.map((p, i) => `panel-${i}-${p.image_panel_index}`);
+  const totalMs = panels.reduce((sum, p) => sum + p.duration_ms, 0);
   const assetsByIdx = new Map(sourcePanels.map((p) => [p.index, p.assetId] as const));
+  const selected = panels[selectedIdx];
 
-  const tle = useTranslation().t;
-  if (!q.data) return <p className="p-6 text-sm text-muted-foreground">{tle("timeline.loadingRun")}</p>;
-  if (sourcePanels.length === 0) return <p className="p-6 text-sm text-muted-foreground">{tle("timeline.waitImageStep")}</p>;
+  if (!q.data) return <p className="p-6 text-sm text-muted-foreground">{t("timeline.loadingRun")}</p>;
+  if (sourcePanels.length === 0) return <p className="p-6 text-sm text-muted-foreground">{t("timeline.waitImageStep")}</p>;
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-4">
+    <div className="max-w-7xl mx-auto p-4 space-y-3">
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>{tle("timeline.title")} — {q.data.prompt.slice(0, 60)}…</CardTitle>
+        <CardHeader className="py-3">
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-base truncate">
+              {t("timeline.title")} — <span className="text-muted-foreground font-normal">{q.data.prompt.slice(0, 80)}</span>
+            </CardTitle>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {tle("timeline.totalLabel", { seconds: (totalDur / 1000).toFixed(1), panels: panels.length })}
+              <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                {t("timeline.totalLabel", { seconds: (totalMs / 1000).toFixed(1), panels: panels.length })}
               </span>
-              <Button variant="outline" className="h-7 px-2 text-xs" onClick={() => nav(`/runs/${id}`)}>{tle("common.back")}</Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-4 gap-2 text-xs">
-            <SelectField label={tle("studio.fps")} value={String(fps)} options={FPS_PRESETS.map(String)} onChange={(v) => setFps(Number(v))} />
-            <SelectField
-              label={tle("studio.resolution")}
-              value={resolution.label}
-              options={RESOLUTION_PRESETS.map((r) => r.label)}
-              onChange={(v) => setResolution(RESOLUTION_PRESETS.find((r) => r.label === v) ?? RESOLUTION_PRESETS[0])}
-            />
-            <SelectField label="codec" value={codec} options={["h264", "h265"]} onChange={(v) => setCodec(v as "h264" | "h265")} />
-            <div className="flex items-end justify-end">
-              <Button
-                className="h-8 px-3 text-xs"
-                disabled={submit.isPending || panels.length === 0}
-                onClick={() => { setSubmitErr(null); submit.mutate(); }}
-              >
-                {submit.isPending ? tle("timeline.rendering") : tle("timeline.renderWithTimeline")}
+              <Button variant="outline" className="h-7 px-2 text-xs" onClick={() => nav(`/runs/${id}`)}>
+                {t("common.back")}
               </Button>
             </div>
           </div>
-          {submitErr ? <p className="text-xs text-red-400">{submitErr}</p> : null}
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">{tle("timeline.dragHint")}</p>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-0">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <SelectField label={t("studio.fps")} value={String(fps)} options={FPS_PRESETS.map(String)}
+              onChange={(v) => setFps(Number(v))} />
+            <SelectField label={t("studio.resolution")} value={resolution.label}
+              options={RESOLUTION_PRESETS.map((r) => r.label)}
+              onChange={(v) => setResolution(RESOLUTION_PRESETS.find((r) => r.label === v) ?? RESOLUTION_PRESETS[0])} />
+            <SelectField label="codec" value={codec} options={["h264", "h265"]}
+              onChange={(v) => setCodec(v as "h264" | "h265")} />
             <Button
               variant="outline"
-              className="h-7 px-2 text-xs"
-              onClick={() => setPanels(sourcePanels.map((p) => defaultPanel(p.index, 2500, p.caption)))}
+              className="h-9 mt-4 text-xs"
+              disabled={renderMut.isPending || panels.length === 0}
+              onClick={() => { setSubmitErr(null); renderMut.mutate("preview"); }}
+              title={t("timeline.previewHint", "Quick low-res draft to verify the cut.")}
             >
-              {tle("timeline.reset")}
+              {renderMut.isPending && renderMut.variables === "preview" ? t("timeline.rendering") : t("timeline.preview", "Preview (draft)")}
+            </Button>
+            <Button
+              className="h-9 mt-4 text-xs"
+              disabled={renderMut.isPending || panels.length === 0}
+              onClick={() => { setSubmitErr(null); renderMut.mutate("final"); }}
+            >
+              {renderMut.isPending && renderMut.variables === "final" ? t("timeline.rendering") : t("timeline.renderFinal", "Render final")}
             </Button>
           </div>
+          {submitErr ? <p className="text-xs text-red-400">{submitErr}</p> : null}
         </CardContent>
       </Card>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={items} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {panels.map((p, i) => (
-              <SortablePanel
-                key={`${i}-${p.image_panel_index}`}
-                p={p}
-                idx={i}
-                asset={(q.data!.assets ?? []).find((a) => a.id === assetsByIdx.get(p.image_panel_index))}
-                onChange={(next) => setPanels((curr) => curr.map((c, j) => (j === i ? next : c)))}
-                onRemove={() => setPanels((curr) => curr.filter((_, j) => j !== i))}
-              />
-            ))}
+
+      {/* TRACK */}
+      <Card>
+        <CardHeader className="py-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">{t("timeline.trackTitle", "Timeline")}</CardTitle>
+            <Button variant="outline" className="h-6 px-2 text-[10px]"
+              onClick={() => setPanels(sourcePanels.map((p) => defaultPanel(p.index, 2500, p.caption)))}>
+              {t("timeline.reset")}
+            </Button>
           </div>
-        </SortableContext>
-      </DndContext>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="overflow-x-auto">
+            <div className="min-w-max">
+              <TimeRuler totalMs={totalMs} />
+              <div className="flex items-stretch mt-1">
+                {panels.map((p, i) => {
+                  const widthPx = (p.duration_ms / 1000) * PX_PER_SECOND;
+                  return (
+                    <Fragment key={`p-${i}-${p.image_panel_index}`}>
+                      {i > 0 ? <TransitionSeam panel={p} /> : null}
+                      <TrackTile
+                        panel={p}
+                        idx={i}
+                        asset={(q.data!.assets ?? []).find((a) => a.id === assetsByIdx.get(p.image_panel_index))}
+                        selected={selectedIdx === i}
+                        widthPx={widthPx}
+                        onSelect={() => setSelectedIdx(i)}
+                        onShift={(d) => shift(i, d)}
+                      />
+                    </Fragment>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2">
+            {t("timeline.trackHint", "Each tile's width equals its duration. Coloured seams are transitions — click a tile to edit it below.")}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* INSPECTOR */}
+      {selected ? (
+        <Card>
+          <CardContent className="pt-4">
+            <PanelInspector
+              panel={selected}
+              sourceCount={panels.length}
+              onChange={(next) => setPanels((curr) => curr.map((c, j) => (j === selectedIdx ? next : c)))}
+              onRemove={() => {
+                setPanels((curr) => curr.filter((_, j) => j !== selectedIdx));
+                setSelectedIdx((s) => Math.max(0, Math.min(s, panels.length - 2)));
+              }}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
