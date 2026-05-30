@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { api, type FormatRow } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CardSkeletonGrid } from "@/components/ui/skeleton";
 
 // Scope filter tabs.
 const SCOPES: { id: "all" | "system" | "user"; key: string }[] = [
@@ -65,7 +66,7 @@ export function Formats() {
         ))}
       </div>
 
-      {q.isLoading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
+      {q.isLoading && <CardSkeletonGrid count={6} cols={3} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map((f) => (
@@ -122,7 +123,7 @@ function FormatCard({ fmt, onDelete }: { fmt: FormatRow; onDelete: () => void })
       <div className="px-6 pb-3 pt-3 mt-auto flex gap-2">
         <Link
           to={`/?format=${fmt.id}`}
-          className="flex-1 text-center text-sm font-medium px-3 py-2 rounded bg-primary text-primary-foreground hover:opacity-90"
+          className="flex-1 text-center text-sm font-medium px-3 py-2 rounded bg-primary text-primary-foreground hover:brightness-110"
         >
           {t("formats.use")} →
         </Link>

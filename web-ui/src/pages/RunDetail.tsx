@@ -362,28 +362,56 @@ function StepCard({ runId, step, assets, busy }: { runId: string; step: StepView
 
 function AttemptHistoryRow({ attempts, activeId, selectedIdx, onSelect }:
   { attempts: AttemptView[]; activeId?: string; selectedIdx: number; onSelect: (i: number) => void }) {
+  // Render the attempt chain as a connected graph of dots so v1 → v2 → v3
+  // reads as a version tree, not a row of buttons. The active version (the one
+  // downstream consumes) gets a thicker ring; the selected one for browsing is
+  // outlined in foreground.
+  const colorFor = (status: string) => {
+    if (status === "completed") return "bg-emerald-500";
+    if (status === "failed") return "bg-red-500";
+    if (status === "running") return "bg-blue-500";
+    if (status === "queued") return "bg-sky-400";
+    return "bg-zinc-500";
+  };
   return (
-    <div className="flex flex-wrap gap-1 text-[11px]">
-      <span className="text-muted-foreground mr-1">attempts:</span>
-      {attempts.map((a, i) => {
-        const isActive = a.id === activeId;
-        const isSelected = i === selectedIdx;
-        return (
-          <button
-            key={a.id}
-            onClick={() => onSelect(i)}
-            className={
-              "rounded border px-2 py-0.5 tabular-nums " +
-              (isSelected ? "border-foreground" : "border-border") +
-              (isActive ? " bg-foreground/10" : "")
-            }
-            title={a.status + (a.error ? ` — ${a.error.slice(0, 100)}` : "")}
-          >
-            v{a.attempt_no} · {a.status}
-            {isActive ? " *" : ""}
-          </button>
-        );
-      })}
+    <div className="space-y-1">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">history</p>
+      <div className="flex items-center gap-0">
+        {attempts.map((a, i) => {
+          const isActive = a.id === activeId;
+          const isSelected = i === selectedIdx;
+          const last = i === attempts.length - 1;
+          return (
+            <div key={a.id} className="flex items-center">
+              <button
+                onClick={() => onSelect(i)}
+                title={`v${a.attempt_no} · ${a.status}${a.error ? ` — ${a.error.slice(0, 100)}` : ""}`}
+                className={
+                  "relative flex flex-col items-center gap-0.5 group"
+                }
+              >
+                <span
+                  className={
+                    "h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-medium text-white tabular-nums " +
+                    colorFor(a.status) +
+                    (isActive ? " ring-2 ring-foreground/80" : "") +
+                    (isSelected && !isActive ? " ring-2 ring-foreground/40" : "")
+                  }
+                >
+                  {a.attempt_no}
+                </span>
+                <span className={"text-[9px] " + (isSelected ? "text-foreground" : "text-muted-foreground")}>
+                  v{a.attempt_no}
+                  {isActive ? " ←" : ""}
+                </span>
+              </button>
+              {!last ? (
+                <div className="w-6 h-px bg-border self-start mt-3" />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

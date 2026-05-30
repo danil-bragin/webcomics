@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { api, type PresetView, type PresetCategory } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CardSkeletonGrid } from "@/components/ui/skeleton";
 
 const CATEGORIES: { id: PresetCategory | "all"; icon: string; key: string }[] = [
   { id: "all",    icon: "✦", key: "presets.cat.all" },
@@ -80,7 +81,7 @@ export function Presets() {
         ))}
       </div>
 
-      {q.isLoading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
+      {q.isLoading && <CardSkeletonGrid count={6} cols={3} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {presets.map((p) => (
@@ -161,7 +162,7 @@ function PresetCard({ preset, onDelete }: { preset: PresetView; onDelete: () => 
       <div className="px-6 pb-3 pt-3 mt-auto">
         <Link
           to={`/?preset=${preset.id}`}
-          className="block w-full text-center text-sm font-medium px-3 py-2 rounded bg-primary text-primary-foreground hover:opacity-90"
+          className="block w-full text-center text-sm font-medium px-3 py-2 rounded bg-primary text-primary-foreground hover:brightness-110"
         >
           {t("presets.use")} →
         </Link>

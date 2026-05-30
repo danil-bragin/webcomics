@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
+import { CardSkeletonGrid } from "@/components/ui/skeleton";
 
 export function Projects() {
   const { t } = useTranslation();
@@ -58,7 +59,7 @@ export function Projects() {
         </div>
 
         {q.isLoading ? (
-          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+          <CardSkeletonGrid count={6} cols={3} />
         ) : items.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("projects.noProjectsHint")}</p>
         ) : (

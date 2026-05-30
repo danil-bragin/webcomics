@@ -2,10 +2,10 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 
 const variants = {
-  default: "bg-primary text-primary-foreground hover:opacity-90",
+  default: "bg-primary text-primary-foreground hover:brightness-110",
   secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
   outline: "border border-border bg-transparent hover:bg-secondary",
-  destructive: "bg-destructive text-destructive-foreground hover:opacity-90",
+  destructive: "bg-destructive text-destructive-foreground hover:brightness-110",
   ghost: "hover:bg-secondary",
 } as const;
 

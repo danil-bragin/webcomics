@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CardSkeletonGrid } from "@/components/ui/skeleton";
 import { fmtMoney, statusVariant } from "@/lib/format";
 
 const ALL_STATUSES = ["queued", "running", "completed", "failed", "cancelled"] as const;
@@ -111,7 +112,7 @@ export function RunsList() {
             onChange={(e) => setSearch(e.target.value)}
             className="mb-4"
           />
-          {q.isLoading ? <p className="text-sm text-muted-foreground">{t("common.loading")}</p> : null}
+          {q.isLoading ? <CardSkeletonGrid count={6} cols={3} /> : null}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {items.map((r) => (
               <RunCard
