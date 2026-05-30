@@ -15,6 +15,9 @@ dependencies = [
     "tenacity>=8.5.0",
     "selenium>=4.20.0",
     "webdriver-manager>=4.0.0",
+    # Pillow validates fal.ai outputs: rejects pitch-black 17KB placeholders
+    # that the safety filter sometimes returns instead of real images.
+    "pillow>=10.4.0",
 ]
 
 [project.optional-dependencies]

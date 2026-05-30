@@ -136,7 +136,8 @@ func (c *RawCompletionConsumer) handleImage(ctx context.Context, body []byte) er
 	_, err := bus.Dispatch[pipecmd.RecordStepResult](ctx, c.reg, pipecmd.RecordImageCompleted{
 		RunID: p.RunID, StepIndex: p.StepIndex,
 		PanelIndex: p.PanelIndex, ObjectKey: p.ObjectKey, Bucket: p.Bucket,
-		Cost: p.Cost, DurationMs: p.DurationMs,
+		Bytes: p.Bytes,
+		Cost:  p.Cost, DurationMs: p.DurationMs,
 	})
 	return err
 }

@@ -31,8 +31,8 @@ func completeImagePanels(t *testing.T, run *Run, stepIdx, count int) {
 	t.Helper()
 	for i := range count {
 		key := jsonFmt("runs/x/%d/panel-%d.png", stepIdx, i)
-		if err := run.RecordImageCompleted(stepIdx, i, key, CostInfo{TotalCostUSD: 0.003}, 50); err != nil {
-			t.Fatalf("RecordImageCompleted(%d, %d): %v", stepIdx, i, err)
+		if err := run.RecordImageCompleted(stepIdx, i, key, CostInfo{TotalCostUSD: 0.003}, 50, 0); err != nil {
+			t.Fatalf("RecordImageCompleted(%d, %d, 0): %v", stepIdx, i, err)
 		}
 	}
 }

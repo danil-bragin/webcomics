@@ -102,7 +102,18 @@ class ImageHandler:
                 try:
                     refs = await self._refs_to_data_uris(ref_keys)
                     data, content_type, cost = await self.fal.generate(prompt, model, params, refs)
+                    # Validate inside the retry loop so a sporadic black-frame
+                    # placeholder from fal triggers another attempt instead of
+                    # killing the whole panel (and, for style_reference=previous
+                    # runs, the entire remainder of the sequence).
+                    _validate_image_payload(data, content_type)
                     break
+                except _BlankImageError as e:
+                    if attempt == len(_RETRY_BACKOFF):
+                        raise
+                    ctx.warning("blank image — retrying",
+                                attempt=attempt, delay=delay, reason=str(e))
+                    await asyncio.sleep(delay)
                 except Exception as e:
                     if not _is_transient_fal_error(e) or attempt == len(_RETRY_BACKOFF):
                         raise
@@ -110,7 +121,6 @@ class ImageHandler:
                                 attempt=attempt, delay=delay, err=str(e)[:200])
                     await asyncio.sleep(delay)
             assert data is not None  # invariant: break ran or we re-raised
-            _validate_image_payload(data, content_type)
         except _BlankImageError as e:
             # Fal silently returns a tiny black placeholder when its content
             # moderation soft-blocks a prompt. Surface as a real failure so the
@@ -139,6 +149,7 @@ class ImageHandler:
             "panel_index": panel_index,
             "object_key": output_key,
             "bucket": self.store.bucket,
+            "bytes": len(data),
             "cost": cost,
             "duration_ms": duration_ms,
         })

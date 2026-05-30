@@ -40,7 +40,7 @@ func driveToCaption(t *testing.T, run *Run) {
 	}
 	for i := range 2 {
 		key := "runs/x/1/panel-" + itoa(i) + ".png"
-		if err := run.RecordImageCompleted(1, i, key, CostInfo{TotalCostUSD: 0.003}, 30); err != nil {
+		if err := run.RecordImageCompleted(1, i, key, CostInfo{TotalCostUSD: 0.003}, 30, 0); err != nil {
 			t.Fatalf("image %d: %v", i, err)
 		}
 	}

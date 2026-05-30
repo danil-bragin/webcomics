@@ -261,7 +261,8 @@ func (c *Consumer) onImageCompleted(msg *message.Message) error {
 	_, err := bus.Dispatch[pipecmd.RecordStepResult](msg.Context(), c.reg, pipecmd.RecordImageCompleted{
 		RunID: p.RunID, StepIndex: p.StepIndex,
 		PanelIndex: p.PanelIndex, ObjectKey: p.ObjectKey, Bucket: p.Bucket,
-		Cost: p.Cost, DurationMs: p.DurationMs,
+		Bytes: p.Bytes,
+		Cost:  p.Cost, DurationMs: p.DurationMs,
 	})
 	return err
 }

@@ -625,7 +625,7 @@ func (r *Run) RecordScriptCompleted(stepIdx int, scriptKey string, panels []Pane
 }
 
 // RecordImageCompleted updates one panel's slot in the active attempt's outputs.
-func (r *Run) RecordImageCompleted(stepIdx, panelIdx int, objectKey string, cost CostInfo, _ int) error {
+func (r *Run) RecordImageCompleted(stepIdx, panelIdx int, objectKey string, cost CostInfo, _ int, bytes int64) error {
 	step, attempt, err := r.openAttempt(stepIdx, StepImage)
 	if err != nil {
 		return err
@@ -662,7 +662,7 @@ func (r *Run) RecordImageCompleted(stepIdx, panelIdx int, objectKey string, cost
 	r.appendCost(step.id, attempt.id, cost, now)
 	if objectKey != "" {
 		r.newAssets = append(r.newAssets, NewAsset(
-			r.id, step.id, attempt.id, AssetPanelImage, "", objectKey, "image/png", 0,
+			r.id, step.id, attempt.id, AssetPanelImage, "", objectKey, "image/png", bytes,
 		))
 	}
 	if attempt.panelsCompleted >= attempt.panelsExpected {

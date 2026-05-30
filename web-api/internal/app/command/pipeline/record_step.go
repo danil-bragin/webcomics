@@ -59,6 +59,7 @@ type RecordImageCompleted struct {
 	PanelIndex int
 	ObjectKey  string
 	Bucket     string
+	Bytes      int64
 	Cost       pipeline.CostInfo
 	DurationMs int
 }
@@ -82,7 +83,7 @@ func (h *RecordImageCompletedHandler) Handle(ctx context.Context, cmd RecordImag
 		if err != nil {
 			return err
 		}
-		if err := run.RecordImageCompleted(cmd.StepIndex, cmd.PanelIndex, cmd.ObjectKey, cmd.Cost, cmd.DurationMs); err != nil {
+		if err := run.RecordImageCompleted(cmd.StepIndex, cmd.PanelIndex, cmd.ObjectKey, cmd.Cost, cmd.DurationMs, cmd.Bytes); err != nil {
 			return err
 		}
 		run.FillEmptyBucketsOnNewAssets(cmd.Bucket)

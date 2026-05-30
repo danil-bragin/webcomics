@@ -140,7 +140,7 @@ func TestRecordImageCompleted_FanInAndAdvance(t *testing.T) {
 	imgCost := CostInfo{Provider: "fal", Model: "flux", Units: 1, UnitLabel: "images", UnitCostUSD: 0.003, TotalCostUSD: 0.003}
 
 	// First two panels: step remains running, no new outbox events.
-	if err := run.RecordImageCompleted(1, 0, "runs/x/1/0.png", imgCost, 100); err != nil {
+	if err := run.RecordImageCompleted(1, 0, "runs/x/1/0.png", imgCost, 100, 0); err != nil {
 		t.Fatalf("panel 0: %v", err)
 	}
 	if got := run.Steps()[1].Status(); got != StepRunning {
@@ -149,7 +149,7 @@ func TestRecordImageCompleted_FanInAndAdvance(t *testing.T) {
 	if events := pullEventNames(run.PullEvents()); len(events) != 0 {
 		t.Fatalf("after panel 0: want no events, got %v", events)
 	}
-	if err := run.RecordImageCompleted(1, 1, "runs/x/1/1.png", imgCost, 100); err != nil {
+	if err := run.RecordImageCompleted(1, 1, "runs/x/1/1.png", imgCost, 100, 0); err != nil {
 		t.Fatalf("panel 1: %v", err)
 	}
 	if got := run.Steps()[1].Status(); got != StepRunning {
@@ -157,7 +157,7 @@ func TestRecordImageCompleted_FanInAndAdvance(t *testing.T) {
 	}
 
 	// Third panel completes the step and emits assemble.requested.
-	if err := run.RecordImageCompleted(1, 2, "runs/x/1/2.png", imgCost, 100); err != nil {
+	if err := run.RecordImageCompleted(1, 2, "runs/x/1/2.png", imgCost, 100, 0); err != nil {
 		t.Fatalf("panel 2: %v", err)
 	}
 	if got := run.Steps()[1].Status(); got != StepCompleted {
@@ -188,9 +188,9 @@ func TestRecordImageCompleted_IdempotentSamePanelKey(t *testing.T) {
 	_ = run.PullEvents()
 
 	imgCost := CostInfo{Provider: "fal", TotalCostUSD: 0.003}
-	_ = run.RecordImageCompleted(1, 0, "k0", imgCost, 0)
+	_ = run.RecordImageCompleted(1, 0, "k0", imgCost, 0, 0)
 	// Same panel + same key — should be a no-op.
-	_ = run.RecordImageCompleted(1, 0, "k0", imgCost, 0)
+	_ = run.RecordImageCompleted(1, 0, "k0", imgCost, 0, 0)
 	if got := run.Steps()[1].PanelsCompleted(); got != 1 {
 		t.Fatalf("panels_completed: want 1 (idempotent), got %d", got)
 	}
@@ -203,7 +203,7 @@ func TestRecordAssembleCompleted_FinalizesRun(t *testing.T) {
 	_ = run.PullEvents()
 	_ = run.RecordScriptCompleted(0, "s", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or", TotalCostUSD: 0.001}, 0)
 	_ = run.PullEvents()
-	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0)
+	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0, 0)
 	_ = run.PullEvents()
 
 	if err := run.RecordAssembleCompleted(2, "runs/x/2/video.mp4", CostInfo{Provider: "local"}, 200); err != nil {
@@ -271,7 +271,7 @@ func TestCancel_RejectsTerminal(t *testing.T) {
 	_ = run.PullEvents()
 	_ = run.RecordScriptCompleted(0, "s", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{}, 0)
 	_ = run.PullEvents()
-	_ = run.RecordImageCompleted(1, 0, "k", CostInfo{}, 0)
+	_ = run.RecordImageCompleted(1, 0, "k", CostInfo{}, 0, 0)
 	_ = run.PullEvents()
 	_ = run.RecordAssembleCompleted(2, "v", CostInfo{}, 0)
 	if err := run.Cancel(); err == nil {
@@ -293,7 +293,7 @@ func TestRecordImageCompleted_RejectsUnknownPanel(t *testing.T) {
 	run, _ := NewRun("x", tpl)
 	_ = run.Start()
 	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{}, 0)
-	if err := run.RecordImageCompleted(1, 42, "x", CostInfo{}, 0); err != ErrUnknownPanel {
+	if err := run.RecordImageCompleted(1, 42, "x", CostInfo{}, 0, 0); err != ErrUnknownPanel {
 		t.Fatalf("want ErrUnknownPanel, got %v", err)
 	}
 }
@@ -323,7 +323,7 @@ func TestExtensibility_ScriptImageAudioAssemble(t *testing.T) {
 	}
 
 	// image
-	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0)
+	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0, 0)
 	got := pullEventNames(run.PullEvents())
 	if len(got) != 1 || got[0] != "pipeline.audio.requested" {
 		t.Fatalf("after image want audio.requested, got %v", got)
@@ -382,7 +382,7 @@ func TestRecordAudioCompleted_Standalone(t *testing.T) {
 	_ = run.PullEvents()
 	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p", Caption: "c"}}, CostInfo{Provider: "or"}, 0)
 	_ = run.PullEvents()
-	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal"}, 0)
+	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal"}, 0, 0)
 	_ = run.PullEvents()
 
 	// Audio step now in flight. Pre-state: pending → running on requestStep.
@@ -418,7 +418,7 @@ func TestUploadStep_PassesAssembleVideoKey(t *testing.T) {
 	_ = run.PullEvents()
 	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or"}, 0)
 	_ = run.PullEvents()
-	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal"}, 0)
+	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal"}, 0, 0)
 	_ = run.PullEvents()
 
 	// After assemble completes, upload step is requested with the video key.
@@ -463,7 +463,7 @@ func TestMusicStep_PassesMusicKeyToAssemble(t *testing.T) {
 	_ = run.PullEvents()
 	_ = run.RecordScriptCompleted(0, "k", []PanelDef{{Index: 0, Prompt: "p"}}, CostInfo{Provider: "or"}, 0)
 	_ = run.PullEvents()
-	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal"}, 0)
+	_ = run.RecordImageCompleted(1, 0, "img", CostInfo{Provider: "fal"}, 0, 0)
 	got := pullEventNames(run.PullEvents())
 	if len(got) != 1 || got[0] != "pipeline.music.requested" {
 		t.Fatalf("after image want music.requested, got %v", got)
@@ -523,14 +523,14 @@ func TestCostCap_FailsRunWhenExceeded(t *testing.T) {
 	_ = run.RecordScriptCompleted(0, "k", panels, CostInfo{Provider: "or", TotalCostUSD: 0.001}, 0)
 	_ = run.PullEvents()
 	// First panel: under cap.
-	_ = run.RecordImageCompleted(1, 0, "k0", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0)
+	_ = run.RecordImageCompleted(1, 0, "k0", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0, 0)
 	if run.Status() != RunStatusRunning {
 		t.Fatalf("after panel 0 status: %s", run.Status())
 	}
 	// Second panel: crosses cap. advance() should mark run failed + emit run.failed.
-	_ = run.RecordImageCompleted(1, 1, "k1", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0)
+	_ = run.RecordImageCompleted(1, 1, "k1", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0, 0)
 	// 2nd panel still doesn't trigger advance() because all panels not done. Trigger by completing 3rd.
-	_ = run.RecordImageCompleted(1, 2, "k2", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0)
+	_ = run.RecordImageCompleted(1, 2, "k2", CostInfo{Provider: "fal", TotalCostUSD: 0.003}, 0, 0)
 	if run.Status() != RunStatusFailed {
 		t.Fatalf("after cost cap exceeded want failed, got %s", run.Status())
 	}
