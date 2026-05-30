@@ -112,6 +112,24 @@ func (s *Store) RemoveObject(ctx context.Context, bucket, key string) error {
 	return s.client.RemoveObject(ctx, bucket, key, minio.RemoveObjectOptions{})
 }
 
+// RemovePrefix wipes everything under the given prefix recursively. Used by
+// the DeleteRun handler to clean up runs/{run_id}/* without bookkeeping
+// individual asset keys.
+func (s *Store) RemovePrefix(ctx context.Context, bucket, prefix string) error {
+	if bucket == "" {
+		bucket = s.bucket
+	}
+	objCh := s.client.ListObjects(ctx, bucket, minio.ListObjectsOptions{
+		Prefix: prefix, Recursive: true,
+	})
+	for err := range s.client.RemoveObjects(ctx, bucket, objCh, minio.RemoveObjectsOptions{}) {
+		if err.Err != nil {
+			return err.Err
+		}
+	}
+	return nil
+}
+
 func (s *Store) PresignPut(ctx context.Context, bucket, key string, ttlSeconds int) (string, error) {
 	if bucket == "" {
 		bucket = s.bucket

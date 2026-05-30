@@ -155,6 +155,10 @@ func Build(cfg *config.Config) *do.RootScope {
 		pipecmd.RecordMusicCompletedOnBus(reg, m)
 		pipecmd.RecordStepFailedOnBus(reg, m)
 		pipecmd.CancelRunOnBus(reg, m)
+		// Delete run cascades into MinIO + DB FKs.
+		store2 := do.MustInvoke[*minio.Store](inj)
+		wp := do.MustInvoke[*postgres.WritePool](inj)
+		pipecmd.DeleteRunOnBus(reg, m, store2, pipecmd.PoolExecAdapter(wp.Pool))
 		pipecmd.CreateTemplateOnBus(reg, m)
 		pipecmd.UpdateTemplateOnBus(reg, m)
 		pipecmd.DeleteTemplateOnBus(reg, m)

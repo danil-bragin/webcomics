@@ -99,6 +99,7 @@ export const api = {
   createRun: (b: CreateRunRequest) =>
     request<IDResponse>("/api/runs", { method: "POST", body: JSON.stringify(b) }),
   cancelRun: (id: string) => request<void>(`/api/runs/${id}/cancel`, { method: "POST" }),
+  deleteRun: (id: string) => request<void>(`/api/runs/${id}`, { method: "DELETE" }),
   retryRun: (id: string) => request<IDResponse>(`/api/runs/${id}/retry`, { method: "POST" }),
   regenerateStep: (id: string, idx: number, b: RegenerateStepRequest) =>
     request<RegenerateStepResponse>(`/api/runs/${id}/steps/${idx}/regenerate`, {

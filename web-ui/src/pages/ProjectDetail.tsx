@@ -522,7 +522,7 @@ export function ProjectDetail() {
 
   const [newCharName, setNewCharName] = useState("");
   const [newEnvName, setNewEnvName] = useState("");
-  const [tab, setTab] = useState<"overview" | "runs">("overview");
+  const [tab, setTab] = useState<"overview" | "runs" | "content" | "plot" | "social" | "defaults">("overview");
 
   const createChar = useMutation({
     mutationFn: () => api.createCharacter(id, { name: newCharName }),
@@ -564,12 +564,43 @@ export function ProjectDetail() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-1 border-b border-border">
+      <div className="flex gap-1 border-b border-border overflow-x-auto">
         <TabBtn active={tab === "overview"} onClick={() => setTab("overview")}>{t("projects.overview")}</TabBtn>
         <TabBtn active={tab === "runs"} onClick={() => setTab("runs")}>
           {t("runs.title")} <span className="text-muted-foreground">({runs.data?.length ?? 0})</span>
         </TabBtn>
+        <TabBtn active={tab === "content"} onClick={() => setTab("content")}>
+          {t("projects.tabContent")} <span className="text-muted-foreground">({(d.characters?.length ?? 0) + (d.environments?.length ?? 0)})</span>
+        </TabBtn>
+        <TabBtn active={tab === "plot"} onClick={() => setTab("plot")}>
+          {t("projects.plot")}
+        </TabBtn>
+        <TabBtn active={tab === "social"} onClick={() => setTab("social")}>
+          {t("projects.tabSocialUpload")} <span className="text-muted-foreground">({d.social_accounts?.length ?? 0})</span>
+        </TabBtn>
+        <TabBtn active={tab === "defaults"} onClick={() => setTab("defaults")}>
+          {t("projects.tabDefaults")}
+        </TabBtn>
       </div>
+
+      {tab === "overview" ? (
+        <Card>
+          <CardHeader><CardTitle>{t("projects.overview")}</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="grid grid-cols-3 gap-4">
+              <Stat label={t("runs.title")} value={String(runs.data?.length ?? 0)} />
+              <Stat label={t("projects.characters")} value={String(d.characters?.length ?? 0)} />
+              <Stat label={t("projects.environments")} value={String(d.environments?.length ?? 0)} />
+              <Stat label={t("social.title")} value={String(d.social_accounts?.length ?? 0)} />
+              <Stat label={t("projects.plot")} value={d.plot ? "✓" : "—"} />
+              <Stat label={t("projectDefaults.formatPreset")} value={String((d.project.defaults as any)?.format_id ?? "—")} />
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              {d.project.description || <span className="italic opacity-60">{t("projects.noDescription")}</span>}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {tab === "runs" ? (
         runs.data && runs.data.length > 0 ? (
@@ -593,18 +624,7 @@ export function ProjectDetail() {
         )
       ) : null}
 
-      {tab === "overview" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("projects.defaultSettings")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ProjectDefaultsCard projectId={id} initial={(d.project.defaults ?? {}) as ProjectDefaults} />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {tab === "overview" ? (
+      {tab === "content" ? (
         <>
           <Card>
             <CardHeader>
@@ -649,26 +669,61 @@ export function ProjectDetail() {
               </div>
             </CardContent>
           </Card>
-
-          <SocialAccountsSection projectId={id} accounts={d.social_accounts ?? []} />
-          <UploadDefaultsCard projectId={id} defaults={(d.project.defaults ?? {}) as Record<string, unknown>} accounts={d.social_accounts ?? []} />
-          <UploadHistoryCard projectId={id} accounts={d.social_accounts ?? []} />
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("projects.plot")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PlotEditor
-                projectId={id}
-                initialName={d.plot?.name ?? "Main"}
-                initialPremise={d.plot?.premise ?? ""}
-                initialBeats={d.plot?.beats ?? []}
-              />
-            </CardContent>
-          </Card>
         </>
       ) : null}
+
+      {tab === "plot" ? (
+        <Card>
+          <CardHeader><CardTitle>{t("projects.plot")}</CardTitle></CardHeader>
+          <CardContent>
+            <PlotEditor
+              projectId={id}
+              initialName={d.plot?.name ?? "Main"}
+              initialPremise={d.plot?.premise ?? ""}
+              initialBeats={d.plot?.beats ?? []}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {tab === "social" ? (
+        <>
+          <SocialAccountsSection projectId={id} accounts={d.social_accounts ?? []} />
+          {(d.social_accounts ?? []).length > 0 ? (
+            <>
+              <UploadDefaultsCard projectId={id} defaults={(d.project.defaults ?? {}) as Record<string, unknown>} accounts={d.social_accounts ?? []} />
+              <UploadHistoryCard projectId={id} accounts={d.social_accounts ?? []} />
+            </>
+          ) : (
+            <Card>
+              <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                {t("projects.socialFirstHint")}
+              </CardContent>
+            </Card>
+          )}
+        </>
+      ) : null}
+
+      {tab === "defaults" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("projects.defaultSettings")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ProjectDefaultsCard projectId={id} initial={(d.project.defaults ?? {}) as ProjectDefaults} />
+          </CardContent>
+        </Card>
+      ) : null}
+
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-border bg-secondary/10 p-3">
+      <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
+      <p className="text-lg font-semibold tabular-nums">{value}</p>
     </div>
   );
 }

@@ -135,6 +135,7 @@ func (s *Server) Router() http.Handler {
 	s.MountUploadRecords(r)
 	s.MountPresets(r)
 	s.MountFormats(r)
+	s.MountRunDelete(r)
 	if s.audioLib != nil {
 		s.MountAudioLibrary(r, s.audioLib)
 	}

@@ -219,22 +219,17 @@ function VideoTile({ assetId, status }: { assetId?: string; status: string }) {
   }
   if (!url) return <div className="aspect-square bg-secondary/40 animate-pulse" />;
 
+  // Use the poster-only first frame on the list — no hover-play, no darken
+  // overlay. Real playback lives on the run detail page.
   return (
     <video
       ref={videoRef}
       src={url}
-      className="aspect-square w-full object-cover bg-black"
+      className="aspect-square w-full object-cover bg-card"
       muted
-      loop
       playsInline
-      preload="auto"
+      preload="metadata"
       onLoadedMetadata={onLoadedMetadata}
-      onMouseEnter={(e) => (e.currentTarget as HTMLVideoElement).play().catch(() => {})}
-      onMouseLeave={(e) => {
-        const v = e.currentTarget as HTMLVideoElement;
-        v.pause();
-        v.currentTime = 0.1;
-      }}
     />
   );
 }

@@ -72,9 +72,6 @@ export function Studio() {
   const [imageModel, setImageModel] = useState(IMAGE_MODELS[0].slug);
   const [styleRef, setStyleRef] = useState("none");
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [advanced, setAdvanced] = useState(false);
-  const [stepsJSON, setStepsJSON] = useState("");
-  const [stepsError, setStepsError] = useState<string | null>(null);
 
   // Preset marketplace data — replaces the old flat template dropdown.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -103,7 +100,7 @@ export function Studio() {
     if (!t) return;
     hydrateFromTemplate(t as unknown as TemplateView, {
       setPanelCount, setTargetDurationMs, setScriptModel, setImageModel,
-      setSystemPrompt, setEnableAudio, setStepsJSON, setStyleRef,
+      setSystemPrompt, setEnableAudio, setStyleRef,
     });
     // Preset-only: apply language + auto-fill sample prompt when one is set
     // on the preset and the user hasn't typed yet.
@@ -154,7 +151,6 @@ export function Studio() {
   });
 
   const submit = () => {
-    setStepsError(null);
     const overrides: any = {
       panel_count: panelCount,
       target_duration_ms: targetDurationMs,
@@ -174,14 +170,6 @@ export function Studio() {
       height: RESOLUTION_OPTS[renderResolution].h,
       codec: renderCodec,
     };
-    if (advanced && stepsJSON.trim()) {
-      try {
-        overrides.steps = JSON.parse(stepsJSON);
-      } catch (e) {
-        setStepsError("invalid JSON: " + (e as Error).message);
-        return;
-      }
-    }
     const body: any = { prompt, template_id: templateId, overrides, language };
     if (projectId) {
       body.project_id = projectId;
@@ -212,34 +200,23 @@ export function Studio() {
           <CardTitle>{tt("studio.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Format / Project / Language — three top-level pickers on one row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{tt("studio.formatLabel")}</label>
-              <select
-                value={formatId}
-                onChange={(e) => setFormatId(e.target.value)}
-                className="h-9 w-full rounded-md border border-border bg-secondary/30 px-3 text-sm"
-              >
-                <option value="">— {tt("studio.inheritNoFormat")} —</option>
-                {formatsQ.data?.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{tt("studio.projectOptional")}</label>
-              <select
-                value={projectId}
-                onChange={(e) => { setProjectId(e.target.value); setPickedChars(new Set()); setPickedEnvs(new Set()); setUsePlot(false); }}
-                className="h-9 w-full rounded-md border border-border bg-secondary/30 px-3 text-sm"
-              >
-                <option value="">— {tt("studio.standaloneRun")} —</option>
-                {projects.data?.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
+          {/* Format + Project — card pickers like presets. Language stays compact. */}
+          <FormatPickerSection
+            formats={(formatsQ.data ?? [])}
+            selectedId={formatId}
+            onPick={(id) => setFormatId(id)}
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <ProjectPickerSection
+              projects={projects.data ?? []}
+              selectedId={projectId}
+              onPick={(id) => {
+                setProjectId(id);
+                setPickedChars(new Set());
+                setPickedEnvs(new Set());
+                setUsePlot(false);
+              }}
+            />
             <div>
               <label className="text-sm text-muted-foreground mb-1 block">{tt("studio.languageLabel")}</label>
               <select
@@ -251,14 +228,9 @@ export function Studio() {
                 <option value="ru">Русский</option>
                 <option value="fr">Français</option>
               </select>
+              <p className="text-[10px] text-muted-foreground mt-1 opacity-70">{tt("studio.languageHint")}</p>
             </div>
           </div>
-          {formatId && formatsQ.data ? (
-            <p className="text-xs text-muted-foreground -mt-2">
-              {formatsQ.data.find((f) => f.id === formatId)?.description}
-            </p>
-          ) : null}
-          <p className="text-[10px] text-muted-foreground -mt-2 opacity-70">{tt("studio.languageHint")}</p>
 
           {projectId && projectDetail.data ? (
             <div className="rounded border border-border bg-secondary/10 p-3 space-y-2 text-xs">
@@ -562,26 +534,6 @@ export function Studio() {
             />
           </div>
 
-          <details open={advanced}>
-            <summary
-              className="cursor-pointer text-sm text-muted-foreground select-none"
-              onClick={(e) => { e.preventDefault(); setAdvanced((v) => !v); }}
-            >
-              {tt("studio.advancedToggle")}
-            </summary>
-            {advanced ? (
-              <div className="mt-2">
-                <Textarea
-                  rows={12}
-                  value={stepsJSON}
-                  onChange={(e) => setStepsJSON(e.target.value)}
-                  className="font-mono text-xs"
-                />
-                {stepsError ? <p className="text-sm text-red-400 mt-1">{stepsError}</p> : null}
-              </div>
-            ) : null}
-          </details>
-
           {create.error ? <p className="text-sm text-red-400">{(create.error as Error).message}</p> : null}
           <div className="flex justify-end">
             <Button
@@ -604,6 +556,190 @@ const STEP_GLYPH: Record<string, string> = {
   script: "📝", image: "🖼", audio: "🎙", music: "🎵",
   caption: "📰", assemble: "🎬", upload: "☁",
 };
+
+function aspectLabel(w?: number, h?: number): string {
+  if (!w || !h) return "—";
+  const r = w / h;
+  if (Math.abs(r - 1) < 0.05) return "1:1";
+  if (Math.abs(r - 9 / 16) < 0.05) return "9:16";
+  if (Math.abs(r - 16 / 9) < 0.05) return "16:9";
+  if (Math.abs(r - 4 / 3) < 0.05) return "4:3";
+  return `${w}×${h}`;
+}
+
+// Format picker mirrors the PresetPickerSection layout. Card grid → selected
+// inline card with thin meta (aspect badge / fps / transition / image model).
+function FormatPickerSection({ formats, selectedId, onPick }: {
+  formats: any[];
+  selectedId: string;
+  onPick: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [browsing, setBrowsing] = useState(!selectedId);
+  const selected = formats.find((f) => f.id === selectedId);
+
+  useEffect(() => {
+    if (selectedId) setBrowsing(false);
+  }, [selectedId]);
+
+  if (browsing) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-sm text-muted-foreground">{t("studio.formatLabel")}</label>
+          <Link to="/formats" className="text-xs underline text-muted-foreground">
+            {t("studio.openFormatsPage")}
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-72 overflow-y-auto pr-1">
+          <button
+            onClick={() => onPick("")}
+            className={`text-left rounded border p-3 transition-colors ${
+              !selectedId
+                ? "border-primary bg-primary/10"
+                : "border-border bg-secondary/20 hover:border-primary/60"
+            }`}
+          >
+            <div className="flex items-start gap-2">
+              <span className="text-xl leading-none">∅</span>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm">{t("studio.inheritNoFormat")}</div>
+                <div className="text-[10px] text-muted-foreground">{t("studio.noFormatHint")}</div>
+              </div>
+            </div>
+          </button>
+          {formats.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => onPick(f.id)}
+              className="text-left rounded border border-border bg-secondary/20 hover:border-primary/60 p-3 transition-colors"
+            >
+              <div className="flex items-start gap-2">
+                <span className="text-xl leading-none">{f.icon || "🎨"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate">{f.name}</div>
+                  {f.description ? (
+                    <div className="text-[10px] text-muted-foreground line-clamp-2">{f.description}</div>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 mt-2 text-[10px] text-muted-foreground">
+                <span className="px-1.5 py-0.5 rounded bg-secondary/40">{aspectLabel(f.width, f.height)}</span>
+                <span>{f.fps ?? 30}fps</span>
+                <span>·</span>
+                <span>{f.transition || "—"}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-sm text-muted-foreground">{t("studio.formatLabel")}</label>
+        <button onClick={() => setBrowsing(true)} className="text-xs underline text-muted-foreground">
+          {t("studio.changeFormat")}
+        </button>
+      </div>
+      <div className="rounded border border-border bg-secondary/10 p-3 flex items-start gap-3">
+        <span className="text-3xl leading-none">{selected?.icon || "∅"}</span>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium">{selected?.name || t("studio.inheritNoFormat")}</div>
+          {selected?.description ? (
+            <div className="text-xs text-muted-foreground mt-0.5">{selected.description}</div>
+          ) : null}
+          {selected ? (
+            <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+              <span className="px-1.5 py-0.5 rounded bg-secondary/40">{aspectLabel(selected.width, selected.height)}</span>
+              <span>{selected.fps ?? 30}fps</span>
+              <span>·</span>
+              <span>{selected.transition || "—"}</span>
+              {selected.image_model ? (<><span>·</span><span className="truncate">{selected.image_model.split("/").pop()}</span></>) : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Project picker: card grid w/ run count + uploaded count badges, "standalone"
+// always first.
+function ProjectPickerSection({ projects, selectedId, onPick }: {
+  projects: ProjectView[];
+  selectedId: string;
+  onPick: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [browsing, setBrowsing] = useState(!selectedId);
+  const selected = projects.find((p) => p.id === selectedId);
+
+  useEffect(() => {
+    if (selectedId) setBrowsing(false);
+  }, [selectedId]);
+
+  if (browsing) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-sm text-muted-foreground">{t("studio.projectOptional")}</label>
+          <Link to="/projects" className="text-xs underline text-muted-foreground">
+            {t("studio.openProjectsPage")}
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+          <button
+            onClick={() => onPick("")}
+            className={`text-left rounded border p-3 transition-colors ${
+              !selectedId
+                ? "border-primary bg-primary/10"
+                : "border-border bg-secondary/20 hover:border-primary/60"
+            }`}
+          >
+            <div className="font-medium text-sm">{t("studio.standaloneRun")}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">{t("studio.standaloneHint")}</div>
+          </button>
+          {projects.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => onPick(p.id)}
+              className="text-left rounded border border-border bg-secondary/20 hover:border-primary/60 p-3 transition-colors"
+            >
+              <div className="font-medium text-sm truncate">{p.name}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5 flex gap-2">
+                <span>📽 {p.runs_count ?? 0}</span>
+                {(p.uploaded_count ?? 0) > 0 ? <span className="text-green-400">☁ {p.uploaded_count}</span> : null}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-sm text-muted-foreground">{t("studio.projectOptional")}</label>
+        <button onClick={() => setBrowsing(true)} className="text-xs underline text-muted-foreground">
+          {t("studio.changeProject")}
+        </button>
+      </div>
+      <div className="rounded border border-border bg-secondary/10 p-3">
+        <div className="font-medium">{selected?.name || t("studio.standaloneRun")}</div>
+        {selected ? (
+          <div className="text-[10px] text-muted-foreground mt-0.5 flex gap-2">
+            <span>📽 {selected.runs_count ?? 0} {t("runs.title").toLowerCase()}</span>
+            {(selected.uploaded_count ?? 0) > 0 ? <span className="text-green-400">☁ {selected.uploaded_count}</span> : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 function PresetPickerSection({ presets, selectedId, onPick, onUseSample }: {
   presets: PresetView[];
@@ -740,7 +876,6 @@ function hydrateFromTemplate(t: TemplateView, ctx: {
   setImageModel: (s: string) => void;
   setSystemPrompt: (s: string) => void;
   setEnableAudio: (b: boolean) => void;
-  setStepsJSON: (s: string) => void;
   setStyleRef: (s: string) => void;
 }) {
   const steps = t.steps as StepConfig[];
@@ -756,7 +891,6 @@ function hydrateFromTemplate(t: TemplateView, ctx: {
   if (image?.model) ctx.setImageModel(image.model);
   ctx.setSystemPrompt(script?.system_prompt ?? "");
   ctx.setEnableAudio(!!audio);
-  ctx.setStepsJSON(JSON.stringify(steps, null, 2));
   const sr = String((image?.params as any)?.style_reference ?? "none");
   ctx.setStyleRef(sr);
 }

@@ -219,15 +219,6 @@ export function PresetEditor() {
         </CardContent>
       </Card>
 
-      {/* Raw JSON inspector */}
-      <details>
-        <summary className="cursor-pointer text-sm text-muted-foreground">
-          {t("presets.editor.rawJson")}
-        </summary>
-        <pre className="mt-2 text-[11px] bg-secondary/20 p-2 rounded max-h-64 overflow-auto">
-          {JSON.stringify(form, null, 2)}
-        </pre>
-      </details>
     </div>
   );
 }

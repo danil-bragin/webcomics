@@ -130,21 +130,58 @@ function ImageStepBody({ step, assets }: { step: StepView; assets: AssetView[] }
 
 function PanelTile({ index, prompt, caption, asset }: { index: number; prompt: string; caption?: string; asset?: AssetView }) {
   const url = useAssetURL(asset?.id);
+  const [lightbox, setLightbox] = useState(false);
+  const sizeKB = asset && asset.bytes > 0 ? `${(asset.bytes / 1024).toFixed(0)} KB` : null;
   return (
-    <div className="rounded border border-border overflow-hidden bg-secondary/20">
+    <div className="rounded border border-border overflow-hidden bg-secondary/20 group relative">
       {url ? (
-        <img src={url} alt={`panel ${index}`} className="aspect-square w-full object-cover" />
+        <button onClick={() => setLightbox(true)} className="block w-full">
+          <img src={url} alt={`panel ${index}`} className="aspect-square w-full object-cover" />
+        </button>
       ) : (
         <div className="aspect-square bg-secondary/40 animate-pulse" />
       )}
+      {url ? (
+        <a
+          href={url}
+          download={`panel-${index}.png`}
+          className="absolute top-1 right-1 w-7 h-7 rounded bg-background/80 border border-border opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center text-xs"
+          title="download"
+          aria-label="download"
+        >
+          ⬇
+        </a>
+      ) : null}
       <div className="p-2 space-y-1">
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
           <span>panel {index}</span>
-          {asset ? <span>{(asset.bytes / 1024).toFixed(0)} KB</span> : null}
+          {sizeKB ? <span>{sizeKB}</span> : null}
         </div>
         {caption ? <p className="text-xs font-medium">{caption}</p> : null}
         <p className="text-[11px] text-muted-foreground leading-snug">{prompt}</p>
       </div>
+      {lightbox && url ? (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightbox(false)}
+        >
+          <img src={url} alt={`panel ${index} full`} className="max-w-full max-h-full object-contain" />
+          <button
+            onClick={(e) => { e.stopPropagation(); setLightbox(false); }}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-background/80 text-foreground text-lg"
+          >
+            ✕
+          </button>
+          <a
+            href={url}
+            download={`panel-${index}.png`}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-4 right-16 px-3 h-10 rounded bg-primary text-primary-foreground inline-flex items-center text-sm"
+          >
+            ⬇ download
+          </a>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -488,6 +525,10 @@ export function RunDetail() {
     onSuccess: (r) => navigate(`/runs/${r.id}`),
   });
   const cancel = useMutation({ mutationFn: () => api.cancelRun(id) });
+  const del = useMutation({
+    mutationFn: () => api.deleteRun(id),
+    onSuccess: () => navigate("/runs"),
+  });
   const q = useQuery<RunView>({
     queryKey: ["run", id],
     queryFn: () => api.getRun(id),
@@ -552,9 +593,18 @@ export function RunDetail() {
                 </Button>
               ) : null}
               {(run.status === "failed" || run.status === "cancelled" || run.status === "completed") ? (
-                <Button variant="outline" className="h-7 px-2 text-xs" onClick={() => retry.mutate()} disabled={retry.isPending}>
-                  {t("runs.reRun")}
-                </Button>
+                <>
+                  <Button variant="outline" className="h-7 px-2 text-xs" onClick={() => retry.mutate()} disabled={retry.isPending}>
+                    {t("runs.reRun")}
+                  </Button>
+                  <Button variant="outline" className="h-7 px-2 text-xs text-red-400"
+                    onClick={() => {
+                      if (confirm(t("runs.confirmDelete"))) del.mutate();
+                    }}
+                    disabled={del.isPending}>
+                    {del.isPending ? t("common.loading") : t("common.delete")}
+                  </Button>
+                </>
               ) : null}
             </div>
           </div>
