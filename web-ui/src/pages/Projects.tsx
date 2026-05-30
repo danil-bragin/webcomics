@@ -8,10 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { CardSkeletonGrid } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 
 export function Projects() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const toast = useToast();
   const q = useQuery<ProjectView[]>({ queryKey: ["projects"], queryFn: api.listProjects });
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
@@ -20,7 +22,9 @@ export function Projects() {
     onSuccess: () => {
       setName(""); setDesc("");
       qc.invalidateQueries({ queryKey: ["projects"] });
+      toast.push("success", t("projects.created", "Project created"));
     },
+    onError: (e: Error) => toast.push("error", e.message),
   });
 
   const items = (q.data ?? []).filter((p): p is ProjectView => p != null);

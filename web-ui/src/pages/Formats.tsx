@@ -6,6 +6,7 @@ import { api, type FormatRow } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CardSkeletonGrid } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 
 // Scope filter tabs.
 const SCOPES: { id: "all" | "system" | "user"; key: string }[] = [
@@ -29,12 +30,17 @@ export function Formats() {
   const { t } = useTranslation();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const toast = useToast();
   const [scope, setScope] = useState<"all" | "system" | "user">("all");
 
   const q = useQuery({ queryKey: ["formats"], queryFn: () => api.listFormats() });
   const del = useMutation({
     mutationFn: (id: string) => api.deleteFormat(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["formats"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["formats"] });
+      toast.push("success", t("formats.deleted", "Format deleted"));
+    },
+    onError: (e: Error) => toast.push("error", e.message),
   });
 
   const all = ((q.data ?? []) as unknown as FormatRow[]);

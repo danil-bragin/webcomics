@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { fmtDuration, fmtMoney, statusVariant } from "@/lib/format";
+import { useToast } from "@/components/ui/toast";
 import { useEffect, useMemo, useState } from "react";
 
 function useAssetURL(assetId: string | undefined) {
@@ -548,14 +549,21 @@ export function RunDetail() {
   const { t } = useTranslation();
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const retry = useMutation({
     mutationFn: () => api.retryRun(id),
-    onSuccess: (r) => navigate(`/runs/${r.id}`),
+    onSuccess: (r) => { toast.push("success", t("runs.retried", "Run retried")); navigate(`/runs/${r.id}`); },
+    onError: (e: Error) => toast.push("error", e.message),
   });
-  const cancel = useMutation({ mutationFn: () => api.cancelRun(id) });
+  const cancel = useMutation({
+    mutationFn: () => api.cancelRun(id),
+    onSuccess: () => toast.push("info", t("runs.cancelled", "Run cancelled")),
+    onError: (e: Error) => toast.push("error", e.message),
+  });
   const del = useMutation({
     mutationFn: () => api.deleteRun(id),
-    onSuccess: () => navigate("/runs"),
+    onSuccess: () => { toast.push("success", t("runs.deleted", "Run deleted")); navigate("/runs"); },
+    onError: (e: Error) => toast.push("error", e.message),
   });
   const q = useQuery<RunView>({
     queryKey: ["run", id],

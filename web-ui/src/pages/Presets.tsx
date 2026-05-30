@@ -6,6 +6,7 @@ import { api, type PresetView, type PresetCategory } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CardSkeletonGrid } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 
 const CATEGORIES: { id: PresetCategory | "all"; icon: string; key: string }[] = [
   { id: "all",    icon: "✦", key: "presets.cat.all" },
@@ -41,6 +42,7 @@ export function Presets() {
   const { t } = useTranslation();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const toast = useToast();
   const [cat, setCat] = useState<PresetCategory | "all">("all");
 
   const q = useQuery({
@@ -50,7 +52,11 @@ export function Presets() {
 
   const del = useMutation({
     mutationFn: (id: string) => api.deletePreset(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["presets"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["presets"] });
+      toast.push("success", t("presets.deleted", "Preset deleted"));
+    },
+    onError: (e: Error) => toast.push("error", e.message),
   });
 
   const presets = q.data ?? [];

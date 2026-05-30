@@ -1,6 +1,7 @@
 import { Route, Routes, NavLink, BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { ToastProvider } from "@/components/ui/toast";
 import { Studio } from "./pages/Studio";
 import { RunsList } from "./pages/RunsList";
 import { RunDetail } from "./pages/RunDetail";
@@ -70,6 +71,7 @@ const LanguageSwitcher = () => {
 export default function App() {
   return (
     <QueryClientProvider client={qc}>
+      <ToastProvider>
       <BrowserRouter>
         <Nav />
         <Routes>
@@ -91,6 +93,7 @@ export default function App() {
           <Route path="/formats/:id/edit" element={<FormatEditor />} />
         </Routes>
       </BrowserRouter>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }
