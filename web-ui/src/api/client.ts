@@ -44,6 +44,31 @@ export type FormatView = components["schemas"]["FormatView"];
 // Phase 1 backend now returns more fields (status, defaults, link metadata)
 // than the OpenAPI schema declares; widen the TS type here until codegen
 // catches up.
+export type ScheduledUploadView = {
+  id: string;
+  run_id: string;
+  run_prompt: string;
+  social_account_id: string;
+  account_label: string;
+  account_platform: string;
+  scheduled_at: string;
+  status: "pending" | "in_flight" | "completed" | "failed" | "cancelled";
+  external_ref?: string;
+  error?: string;
+  fired_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+};
+
+export type AccountWindowStats = {
+  social_account_id: string;
+  limit_n: number;
+  window_hours: number;
+  count_in_window: number;
+  is_at_limit: boolean;
+  next_free_slot?: string;
+};
+
 export type SocialAccountView = components["schemas"]["SocialAccountView"] & {
   status?: "active" | "needs_relogin" | "banned" | "disabled";
   last_used_at?: string | null;
@@ -56,6 +81,10 @@ export type SocialAccountView = components["schemas"]["SocialAccountView"] & {
   is_default?: boolean;
   project_count?: number;
   upload_count?: number;
+  daily_upload_limit?: number;
+  limit_window_hours?: number;
+  is_verified?: boolean;
+  min_gap_seconds?: number;
 };
 export type SocialAccountBody = components["schemas"]["SocialAccountBody"];
 
@@ -249,6 +278,30 @@ export const api = {
     if (opts.limit) p.set("limit", String(opts.limit));
     return request<PixabayResult[]>(`/api/audio/pixabay/search?${p.toString()}`);
   },
+
+  // ---- Scheduler (Phase 3) ----
+  listScheduled: (opts: { account_id?: string; status?: string; since?: string; until?: string; limit?: number } = {}) => {
+    const p = new URLSearchParams();
+    if (opts.account_id) p.set("account_id", opts.account_id);
+    if (opts.status) p.set("status", opts.status);
+    if (opts.since) p.set("since", opts.since);
+    if (opts.until) p.set("until", opts.until);
+    if (opts.limit) p.set("limit", String(opts.limit));
+    return request<ScheduledUploadView[]>(`/api/schedule${p.toString() ? "?" + p.toString() : ""}`);
+  },
+  scheduleAvailability: (account_id: string, at: string) =>
+    request<AccountWindowStats>(`/api/schedule/availability?account_id=${encodeURIComponent(account_id)}&at=${encodeURIComponent(at)}`),
+  createScheduled: (body: { run_id: string; social_account_id: string; scheduled_at: string; metadata?: Record<string, unknown> }) =>
+    request<{ id: string }>(`/api/schedule`, { method: "POST", body: JSON.stringify(body) }),
+  rescheduleUpload: (id: string, scheduled_at: string) =>
+    request<{ next_free_slot?: string; blocked_reason?: string }>(`/api/schedule/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ scheduled_at }),
+    }),
+  cancelScheduled: (id: string) =>
+    request<void>(`/api/schedule/${id}`, { method: "DELETE" }),
+  patchSocialAccountLimits: (id: string, b: { daily_upload_limit?: number; limit_window_hours?: number; is_verified?: boolean; min_gap_seconds?: number }) =>
+    request<void>(`/api/social/accounts/${id}/limits`, { method: "PATCH", body: JSON.stringify(b) }),
 
   // Global social-accounts library (Phase 2). Project linking lives below.
   listSocialAccountsGlobal: (platform?: string) =>

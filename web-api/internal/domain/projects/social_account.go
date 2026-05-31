@@ -54,6 +54,12 @@ type SocialAccount struct {
 	defaultCategoryID    string
 	defaultCategoryLabel string
 
+	// Rate-limit config (Phase: upload scheduler).
+	dailyUploadLimit int
+	limitWindowHours int
+	isVerified       bool
+	minGapSeconds    int
+
 	createdAt time.Time
 	updatedAt time.Time
 }
@@ -77,6 +83,10 @@ func NewSocialAccount(platform, label, firefoxProfilePath string, extra map[stri
 		defaultVisibility:    "unlisted",
 		defaultCategoryID:    "22",
 		defaultCategoryLabel: "People & Blogs",
+		dailyUploadLimit:     15, // YT unverified
+		limitWindowHours:     24,
+		isVerified:           false,
+		minGapSeconds:        60,
 		createdAt:            now,
 		updatedAt:            now,
 	}, nil
@@ -95,8 +105,27 @@ func (s *SocialAccount) DefaultVisibility() string    { return s.defaultVisibili
 func (s *SocialAccount) DefaultMadeForKids() bool     { return s.defaultMadeForKids }
 func (s *SocialAccount) DefaultCategoryID() string    { return s.defaultCategoryID }
 func (s *SocialAccount) DefaultCategoryLabel() string { return s.defaultCategoryLabel }
+func (s *SocialAccount) DailyUploadLimit() int        { return s.dailyUploadLimit }
+func (s *SocialAccount) LimitWindowHours() int        { return s.limitWindowHours }
+func (s *SocialAccount) IsVerified() bool             { return s.isVerified }
+func (s *SocialAccount) MinGapSeconds() int           { return s.minGapSeconds }
 func (s *SocialAccount) CreatedAt() time.Time         { return s.createdAt }
 func (s *SocialAccount) UpdatedAt() time.Time         { return s.updatedAt }
+
+// SetRateLimit applies new limit fields. Negative input keeps existing value.
+func (s *SocialAccount) SetRateLimit(dailyLimit, windowHours, minGapSec int, verified bool) {
+	if dailyLimit >= 0 {
+		s.dailyUploadLimit = dailyLimit
+	}
+	if windowHours > 0 {
+		s.limitWindowHours = windowHours
+	}
+	if minGapSec >= 0 {
+		s.minGapSeconds = minGapSec
+	}
+	s.isVerified = verified
+	s.updatedAt = time.Now().UTC()
+}
 
 // SetStatus updates the lifecycle state of the account. Setters bumped here
 // because the scheduler + worker need them across packages.
@@ -156,12 +185,14 @@ func (s *SocialAccount) Update(platform, label, profilePath string, extra map[st
 }
 
 // ReconstituteSocialAccountFull rebuilds the aggregate including scheduling
-// + per-account defaults. Used by the write repository to load full state.
+// + per-account defaults + rate-limit config. Used by the write repository
+// to load full state. Limit fields default to YT-unverified values when zero.
 func ReconstituteSocialAccountFull(
 	id SocialAccountID,
 	platform, label, profilePath string, extra map[string]any,
 	status SocialAccountStatus, lastUsed, cooldown *time.Time, failureStreak int,
 	defVis string, defKids bool, defCatID, defCatLabel string,
+	dailyLimit, windowHours, minGapSec int, verified bool,
 	created, updated time.Time,
 ) *SocialAccount {
 	if extra == nil {
@@ -179,12 +210,23 @@ func ReconstituteSocialAccountFull(
 	if defCatLabel == "" {
 		defCatLabel = "People & Blogs"
 	}
+	if dailyLimit < 0 {
+		dailyLimit = 15
+	}
+	if windowHours <= 0 {
+		windowHours = 24
+	}
+	if minGapSec < 0 {
+		minGapSec = 60
+	}
 	return &SocialAccount{
 		id: id, platform: platform, label: label,
 		firefoxProfilePath: profilePath, extra: extra,
 		status: status, lastUsedAt: lastUsed, cooldownUntil: cooldown, failureStreak: failureStreak,
 		defaultVisibility: defVis, defaultMadeForKids: defKids,
 		defaultCategoryID: defCatID, defaultCategoryLabel: defCatLabel,
+		dailyUploadLimit: dailyLimit, limitWindowHours: windowHours,
+		isVerified: verified, minGapSeconds: minGapSec,
 		createdAt: created, updatedAt: updated,
 	}
 }

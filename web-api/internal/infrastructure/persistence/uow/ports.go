@@ -2,11 +2,13 @@ package uow
 
 import (
 	"context"
+	"time"
 
 	"github.com/example/dddcqrs/internal/domain/audiolib"
 	"github.com/example/dddcqrs/internal/domain/formats"
 	"github.com/example/dddcqrs/internal/domain/pipeline"
 	"github.com/example/dddcqrs/internal/domain/projects"
+	"github.com/example/dddcqrs/internal/domain/scheduler"
 	"github.com/example/dddcqrs/internal/domain/shared"
 	"github.com/example/dddcqrs/internal/domain/user"
 )
@@ -36,6 +38,16 @@ type FormatsWriteRepository interface {
 	Save(ctx context.Context, f *formats.Format) error
 	GetByID(ctx context.Context, id string) (*formats.Format, error)
 	Delete(ctx context.Context, id string) error
+}
+
+// SchedulerWriteRepository persists scheduled_uploads inside a UoW tx.
+type SchedulerWriteRepository interface {
+	Save(ctx context.Context, s *scheduler.ScheduledUpload) error
+	Get(ctx context.Context, id scheduler.ID) (*scheduler.ScheduledUpload, error)
+	Delete(ctx context.Context, id scheduler.ID) error
+	ListSlotsInWindow(ctx context.Context, accountID string, targetAt time.Time, window time.Duration) ([]scheduler.SlotPoint, error)
+	ListPendingDue(ctx context.Context, now time.Time, limit int) ([]*scheduler.ScheduledUpload, error)
+	FindByRunPending(ctx context.Context, runID string) (*scheduler.ScheduledUpload, error)
 }
 
 // OutboxRepository persists domain events into the transactional outbox table

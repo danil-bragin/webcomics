@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api, type RunView, type StepView, type AssetView, type AttemptView, type UploadRecordView } from "@/api/client";
+import { api, type RunView, type StepView, type AssetView, type AttemptView, type UploadRecordView, type SocialAccountView } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { fmtDuration, fmtMoney, statusVariant } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
+import { ScheduleUploadModal } from "@/components/ScheduleUploadModal";
 import { useEffect, useMemo, useState } from "react";
 
 // Cached presigned-URL fetcher. Presigned URLs live 5 min on the API side, so
@@ -574,6 +575,7 @@ export function RunDetail() {
     refetchInterval: 0,
   });
   const [streamRun, setStreamRun] = useState<RunView | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   useEffect(() => {
     if (!id) return;
     const es = new EventSource(`/api/runs/${id}/events`);
@@ -636,6 +638,11 @@ export function RunDetail() {
                   <Button variant="outline" className="h-7 px-2 text-xs" onClick={() => retry.mutate()} disabled={retry.isPending}>
                     {t("runs.reRun")}
                   </Button>
+                  {run.status === "completed" ? (
+                    <Button variant="outline" className="h-7 px-2 text-xs" onClick={() => setScheduleOpen(true)}>
+                      {t("runs.schedule", "Запланировать")}
+                    </Button>
+                  ) : null}
                   <Button variant="outline" className="h-7 px-2 text-xs text-red-400"
                     onClick={() => {
                       if (confirm(t("runs.confirmDelete"))) del.mutate();
@@ -672,7 +679,57 @@ export function RunDetail() {
         <StepCard key={s.id} runId={id} step={s} assets={run.assets ?? []} busy={!!busy} />
       ))}
       <UploadRecordsCard runId={id} />
+      {scheduleOpen ? (
+        <RunScheduleModal
+          runId={id}
+          run={run}
+          onClose={() => setScheduleOpen(false)}
+          onScheduled={() => { setScheduleOpen(false); navigate("/schedule"); }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function RunScheduleModal({ runId, run, onClose, onScheduled }: {
+  runId: string;
+  run: RunView;
+  onClose: () => void;
+  onScheduled: () => void;
+}) {
+  const accounts = useQuery<SocialAccountView[]>({
+    queryKey: ["social-accounts-modal"],
+    queryFn: () => api.listSocialAccountsGlobal(),
+  });
+  // Resolve latest video key + script captions for metadata snapshot.
+  const videoKey = (() => {
+    for (const s of run.steps) {
+      if (s.type === "assemble" && Array.isArray(s.outputs) && s.outputs.length > 0) {
+        const first = s.outputs[0] as { object_key?: string };
+        if (first.object_key) return first.object_key;
+      }
+    }
+    return undefined;
+  })();
+  const captions = (() => {
+    for (const s of run.steps) {
+      if (s.type === "script" && Array.isArray(s.outputs)) {
+        return (s.outputs as Array<{ caption?: string }>).map((p) => p.caption ?? "");
+      }
+    }
+    return [];
+  })();
+  if (accounts.isLoading) return null;
+  return (
+    <ScheduleUploadModal
+      runId={runId}
+      accounts={accounts.data ?? []}
+      onClose={onClose}
+      onScheduled={onScheduled}
+      runVideoKey={videoKey}
+      runCaptions={captions}
+      runPrompt={run.prompt}
+    />
   );
 }
 

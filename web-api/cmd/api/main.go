@@ -17,10 +17,12 @@ import (
 	"github.com/example/dddcqrs/internal/infrastructure/config"
 	miniostore "github.com/example/dddcqrs/internal/infrastructure/storage/minio"
 	httpiface "github.com/example/dddcqrs/internal/interfaces/http"
+	"github.com/example/dddcqrs/internal/infrastructure/persistence/uow"
 	"github.com/example/dddcqrs/internal/platform/balances"
 	"github.com/example/dddcqrs/internal/platform/metrics"
 	"github.com/example/dddcqrs/internal/platform/postgres"
 	"github.com/example/dddcqrs/internal/platform/redis"
+	"github.com/example/dddcqrs/internal/platform/scheduler"
 )
 
 // balancesAdapter satisfies httpiface.BalancesProvider so the http package
@@ -64,6 +66,12 @@ func main() {
 			}).
 			Router(),
 	}
+	// In-process scheduler tick loop. Single goroutine — runs alongside the
+	// HTTP server, cancelled by the same SIGINT/SIGTERM path.
+	schedCtx, cancelSched := context.WithCancel(context.Background())
+	schRunner := scheduler.New(do.MustInvoke[uow.Manager](i), rc.Client, log)
+	go schRunner.Run(schedCtx)
+
 	go func() {
 		log.Info("http listening", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -75,6 +83,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
+	cancelSched()
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 	_ = srv.Shutdown(ctx)

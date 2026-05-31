@@ -40,5 +40,6 @@ type Repositories interface {
 	Projects() ProjectsWriteRepository
 	AudioLib() AudioLibWriteRepository
 	Formats() FormatsWriteRepository
+	Scheduler() SchedulerWriteRepository
 	Outbox() OutboxRepository
 }

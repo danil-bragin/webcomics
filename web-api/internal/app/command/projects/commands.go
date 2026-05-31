@@ -482,6 +482,43 @@ func (h *SetDefaultSocialAccountHandler) Handle(ctx context.Context, cmd SetDefa
 	return SetDefaultSocialAccountResult{}, err
 }
 
+// SetSocialAccountLimits updates rate-limit fields on a social account. Use
+// -1 for DailyUploadLimit / MinGapSeconds to leave them unchanged.
+type SetSocialAccountLimits struct {
+	ID               string
+	DailyUploadLimit int
+	LimitWindowHours int
+	IsVerified       bool
+	MinGapSeconds    int
+}
+
+func (SetSocialAccountLimits) IsCommand() {}
+
+type SetSocialAccountLimitsResult struct{}
+
+type SetSocialAccountLimitsHandler struct{ uow uow.Manager }
+
+func NewSetSocialAccountLimitsHandler(m uow.Manager) *SetSocialAccountLimitsHandler {
+	return &SetSocialAccountLimitsHandler{uow: m}
+}
+
+func (h *SetSocialAccountLimitsHandler) Handle(ctx context.Context, cmd SetSocialAccountLimits) (SetSocialAccountLimitsResult, error) {
+	err := h.uow.WithinTx(ctx, func(ctx context.Context, u uow.UnitOfWork) error {
+		repo := u.Repositories().Projects()
+		acct, err := repo.GetSocialAccount(ctx, projects.SocialAccountID(cmd.ID))
+		if err != nil {
+			return err
+		}
+		acct.SetRateLimit(cmd.DailyUploadLimit, cmd.LimitWindowHours, cmd.MinGapSeconds, cmd.IsVerified)
+		return repo.SaveSocialAccount(ctx, acct)
+	})
+	return SetSocialAccountLimitsResult{}, err
+}
+
+func SetSocialAccountLimitsOnBus(r *bus.Registry, m uow.Manager) {
+	bus.RegisterCommand[SetSocialAccountLimits, SetSocialAccountLimitsResult](r, NewSetSocialAccountLimitsHandler(m))
+}
+
 func UpsertSocialAccountOnBus(r *bus.Registry, m uow.Manager) {
 	bus.RegisterCommand[UpsertSocialAccount, UpsertSocialAccountResult](r, NewUpsertSocialAccountHandler(m))
 }

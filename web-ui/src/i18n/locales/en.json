@@ -9,7 +9,8 @@
     "presets": "Presets",
     "formats": "Formats",
     "audio": "Audio",
-    "social": "Social"
+    "social": "Social",
+    "schedule": "Scheduler"
   },
   "common": {
     "save": "Save",

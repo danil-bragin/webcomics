@@ -290,9 +290,10 @@ INSERT INTO social_accounts (
   id, platform, label, firefox_profile_path, extra,
   status, last_used_at, cooldown_until, failure_streak,
   default_visibility, default_made_for_kids, default_category_id, default_category_label,
+  daily_upload_limit, limit_window_hours, is_verified, min_gap_seconds,
   created_at, updated_at
 )
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
 ON CONFLICT (id) DO UPDATE SET
   platform = EXCLUDED.platform,
   label = EXCLUDED.label,
@@ -306,6 +307,10 @@ ON CONFLICT (id) DO UPDATE SET
   default_made_for_kids = EXCLUDED.default_made_for_kids,
   default_category_id = EXCLUDED.default_category_id,
   default_category_label = EXCLUDED.default_category_label,
+  daily_upload_limit = EXCLUDED.daily_upload_limit,
+  limit_window_hours = EXCLUDED.limit_window_hours,
+  is_verified = EXCLUDED.is_verified,
+  min_gap_seconds = EXCLUDED.min_gap_seconds,
   updated_at = EXCLUDED.updated_at`
 
 func (r *ProjectsRepository) SaveSocialAccount(ctx context.Context, a *projects.SocialAccount) error {
@@ -315,6 +320,7 @@ func (r *ProjectsRepository) SaveSocialAccount(ctx context.Context, a *projects.
 		a.Platform(), a.Label(), a.FirefoxProfilePath(), extraJSON,
 		string(a.Status()), a.LastUsedAt(), a.CooldownUntil(), a.FailureStreak(),
 		a.DefaultVisibility(), a.DefaultMadeForKids(), a.DefaultCategoryID(), a.DefaultCategoryLabel(),
+		a.DailyUploadLimit(), a.LimitWindowHours(), a.IsVerified(), a.MinGapSeconds(),
 		a.CreatedAt(), a.UpdatedAt())
 	return err
 }
@@ -323,6 +329,8 @@ const selSocialAccountCols = `id, platform, label, firefox_profile_path, COALESC
        COALESCE(status,'active'), last_used_at, cooldown_until, COALESCE(failure_streak,0),
        COALESCE(default_visibility,'unlisted'), COALESCE(default_made_for_kids,false),
        COALESCE(default_category_id,'22'), COALESCE(default_category_label,'People & Blogs'),
+       COALESCE(daily_upload_limit,15), COALESCE(limit_window_hours,24),
+       COALESCE(is_verified,false), COALESCE(min_gap_seconds,60),
        created_at, updated_at`
 
 func scanSocialAccount(scan func(...any) error) (*projects.SocialAccount, error) {
@@ -330,14 +338,15 @@ func scanSocialAccount(scan func(...any) error) (*projects.SocialAccount, error)
 		sid, platform, label, profilePath      string
 		extraRaw                               []byte
 		statusStr, defVis, defCatID, defCatLab string
-		defKids                                bool
-		failureStreak                          int
+		defKids, verified                      bool
+		failureStreak, dailyLimit, windowH, minGap int
 		lastUsed, cooldown                     *time.Time
 		created, updated                       time.Time
 	)
 	if err := scan(&sid, &platform, &label, &profilePath, &extraRaw,
 		&statusStr, &lastUsed, &cooldown, &failureStreak,
 		&defVis, &defKids, &defCatID, &defCatLab,
+		&dailyLimit, &windowH, &verified, &minGap,
 		&created, &updated); err != nil {
 		return nil, err
 	}
@@ -348,6 +357,7 @@ func scanSocialAccount(scan func(...any) error) (*projects.SocialAccount, error)
 		platform, label, profilePath, extra,
 		projects.SocialAccountStatus(statusStr), lastUsed, cooldown, failureStreak,
 		defVis, defKids, defCatID, defCatLab,
+		dailyLimit, windowH, minGap, verified,
 		created, updated,
 	), nil
 }
@@ -480,6 +490,8 @@ func (r *ProjectsRepository) ListLinkedSocialAccounts(ctx context.Context, proje
 		        COALESCE(a.status,'active'), a.last_used_at, a.cooldown_until, COALESCE(a.failure_streak,0),
 		        COALESCE(a.default_visibility,'unlisted'), COALESCE(a.default_made_for_kids,false),
 		        COALESCE(a.default_category_id,'22'), COALESCE(a.default_category_label,'People & Blogs'),
+		        COALESCE(a.daily_upload_limit,15), COALESCE(a.limit_window_hours,24),
+		        COALESCE(a.is_verified,false), COALESCE(a.min_gap_seconds,60),
 		        a.created_at, a.updated_at, l.is_default
 		   FROM project_social_account_links l
 		   JOIN social_accounts a ON a.id = l.social_account_id
@@ -496,8 +508,8 @@ func (r *ProjectsRepository) ListLinkedSocialAccounts(ctx context.Context, proje
 			sid, platform, label, profilePath      string
 			extraRaw                               []byte
 			statusStr, defVis, defCatID, defCatLab string
-			defKids                                bool
-			failureStreak                          int
+			defKids, verified                      bool
+			failureStreak, dailyLimit, windowH, minGap int
 			lastUsed, cooldown                     *time.Time
 			created, updated                       time.Time
 			isDef                                  bool
@@ -505,6 +517,7 @@ func (r *ProjectsRepository) ListLinkedSocialAccounts(ctx context.Context, proje
 		if err := rows.Scan(&sid, &platform, &label, &profilePath, &extraRaw,
 			&statusStr, &lastUsed, &cooldown, &failureStreak,
 			&defVis, &defKids, &defCatID, &defCatLab,
+			&dailyLimit, &windowH, &verified, &minGap,
 			&created, &updated, &isDef); err != nil {
 			return nil, err
 		}
@@ -515,6 +528,7 @@ func (r *ProjectsRepository) ListLinkedSocialAccounts(ctx context.Context, proje
 			platform, label, profilePath, extra,
 			projects.SocialAccountStatus(statusStr), lastUsed, cooldown, failureStreak,
 			defVis, defKids, defCatID, defCatLab,
+			dailyLimit, windowH, minGap, verified,
 			created, updated,
 		)
 		out = append(out, projects.LinkedSocialAccount{Account: acct, IsDefault: isDef})

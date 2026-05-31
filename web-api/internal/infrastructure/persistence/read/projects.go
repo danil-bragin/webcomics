@@ -99,6 +99,8 @@ func (m *ProjectsModel) ListSocialAccounts(ctx context.Context, projectID string
 	                  COALESCE(a.status,'active'), a.last_used_at, a.cooldown_until, COALESCE(a.failure_streak,0),
 	                  COALESCE(a.default_visibility,'unlisted'), COALESCE(a.default_made_for_kids,false),
 	                  COALESCE(a.default_category_id,'22'), COALESCE(a.default_category_label,'People & Blogs'),
+	                  COALESCE(a.daily_upload_limit,15), COALESCE(a.limit_window_hours,24),
+	                  COALESCE(a.is_verified,false), COALESCE(a.min_gap_seconds,60),
 	                  a.created_at, a.updated_at, l.is_default
 		FROM project_social_account_links l
 		JOIN social_accounts a ON a.id = l.social_account_id
@@ -116,6 +118,7 @@ func (m *ProjectsModel) ListSocialAccounts(ctx context.Context, projectID string
 		if err := rows.Scan(&v.ID, &v.Platform, &v.Label, &v.FirefoxProfilePath, &extraRaw,
 			&v.Status, &v.LastUsedAt, &v.CooldownUntil, &v.FailureStreak,
 			&v.DefaultVisibility, &v.DefaultMadeForKids, &v.DefaultCategoryID, &v.DefaultCategoryLabel,
+			&v.DailyUploadLimit, &v.LimitWindowHours, &v.IsVerified, &v.MinGapSeconds,
 			&v.CreatedAt, &v.UpdatedAt, &v.IsDefault); err != nil {
 			return nil, err
 		}
@@ -133,6 +136,8 @@ func (m *ProjectsModel) ListAllSocialAccounts(ctx context.Context, filterPlatfor
 	             COALESCE(a.status,'active'), a.last_used_at, a.cooldown_until, COALESCE(a.failure_streak,0),
 	             COALESCE(a.default_visibility,'unlisted'), COALESCE(a.default_made_for_kids,false),
 	             COALESCE(a.default_category_id,'22'), COALESCE(a.default_category_label,'People & Blogs'),
+	             COALESCE(a.daily_upload_limit,15), COALESCE(a.limit_window_hours,24),
+	             COALESCE(a.is_verified,false), COALESCE(a.min_gap_seconds,60),
 	             a.created_at, a.updated_at,
 	             (SELECT COUNT(*) FROM project_social_account_links WHERE social_account_id = a.id) AS project_count,
 	             (SELECT COUNT(*) FROM pipeline_upload_records WHERE social_account_id = a.id) AS upload_count
@@ -155,6 +160,7 @@ func (m *ProjectsModel) ListAllSocialAccounts(ctx context.Context, filterPlatfor
 		if err := rows.Scan(&v.ID, &v.Platform, &v.Label, &v.FirefoxProfilePath, &extraRaw,
 			&v.Status, &v.LastUsedAt, &v.CooldownUntil, &v.FailureStreak,
 			&v.DefaultVisibility, &v.DefaultMadeForKids, &v.DefaultCategoryID, &v.DefaultCategoryLabel,
+			&v.DailyUploadLimit, &v.LimitWindowHours, &v.IsVerified, &v.MinGapSeconds,
 			&v.CreatedAt, &v.UpdatedAt, &v.ProjectCount, &v.UploadCount); err != nil {
 			return nil, err
 		}

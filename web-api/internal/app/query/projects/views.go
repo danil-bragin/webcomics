@@ -84,6 +84,10 @@ type SocialAccountView struct {
 	DefaultMadeForKids   bool            `json:"default_made_for_kids"`
 	DefaultCategoryID    string          `json:"default_category_id"`
 	DefaultCategoryLabel string          `json:"default_category_label"`
+	DailyUploadLimit     int             `json:"daily_upload_limit"`
+	LimitWindowHours     int             `json:"limit_window_hours"`
+	IsVerified           bool            `json:"is_verified"`
+	MinGapSeconds        int             `json:"min_gap_seconds"`
 	IsDefault            bool            `json:"is_default,omitempty"`
 	ProjectCount         int             `json:"project_count,omitempty"`
 	UploadCount          int             `json:"upload_count,omitempty"`

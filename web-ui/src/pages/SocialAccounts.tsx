@@ -139,8 +139,32 @@ export function SocialAccounts() {
 
 function AccountCard({ account, onDelete }: { account: SocialAccountView; onDelete: () => void }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
+  const toast = useToast();
   const s = statusBadge(account.status);
   const cooldown = account.cooldown_until && new Date(account.cooldown_until).getTime() > Date.now();
+
+  const [limit, setLimit] = useState<number>(account.daily_upload_limit ?? 15);
+  const [windowH, setWindowH] = useState<number>(account.limit_window_hours ?? 24);
+  const [verified, setVerified] = useState<boolean>(account.is_verified ?? false);
+  const [minGap, setMinGap] = useState<number>(account.min_gap_seconds ?? 60);
+  const saveLimits = useMutation({
+    mutationFn: () => api.patchSocialAccountLimits(account.id, {
+      daily_upload_limit: limit,
+      limit_window_hours: windowH,
+      is_verified: verified,
+      min_gap_seconds: minGap,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["social-accounts"] }); toast.push("success", t("social.limitsSaved", "Limits saved")); },
+    onError: (e: Error) => toast.push("error", e.message),
+  });
+  // Verified toggle suggests bumping limit (one-click ack).
+  function onVerifiedToggle(next: boolean) {
+    setVerified(next);
+    if (next && limit < 100) setLimit(100);
+    if (!next && limit > 15) setLimit(15);
+  }
+
   return (
     <Card>
       <CardContent className="py-4 space-y-2">
@@ -170,6 +194,38 @@ function AccountCard({ account, onDelete }: { account: SocialAccountView; onDele
             {t("social.cooldownUntil", "cooldown until {{ts}}", { ts: new Date(account.cooldown_until!).toLocaleString() })}
           </p>
         ) : null}
+
+        {/* Rate-limit config */}
+        <details className="text-[11px] border-t border-border/40 pt-2">
+          <summary className="cursor-pointer text-muted-foreground">{t("social.limits", "Rate limits")}</summary>
+          <div className="grid grid-cols-2 gap-2 pt-2">
+            <label className="space-y-0.5">
+              <span className="uppercase tracking-wide text-muted-foreground">{t("social.dailyLimit", "Daily limit")}</span>
+              <input type="number" min={0} value={limit} onChange={(e) => setLimit(Number(e.target.value))}
+                className="h-7 w-full rounded border border-border bg-secondary/30 px-2 tabular-nums" />
+            </label>
+            <label className="space-y-0.5">
+              <span className="uppercase tracking-wide text-muted-foreground">{t("social.windowH", "Window (h)")}</span>
+              <input type="number" min={1} max={168} value={windowH} onChange={(e) => setWindowH(Number(e.target.value))}
+                className="h-7 w-full rounded border border-border bg-secondary/30 px-2 tabular-nums" />
+            </label>
+            <label className="space-y-0.5">
+              <span className="uppercase tracking-wide text-muted-foreground">{t("social.minGap", "Min gap (s)")}</span>
+              <input type="number" min={0} value={minGap} onChange={(e) => setMinGap(Number(e.target.value))}
+                className="h-7 w-full rounded border border-border bg-secondary/30 px-2 tabular-nums" />
+            </label>
+            <label className="flex items-center gap-2 pt-4">
+              <input type="checkbox" checked={verified} onChange={(e) => onVerifiedToggle(e.target.checked)} />
+              <span>{t("social.verified", "Verified")}</span>
+            </label>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button className="h-7 px-2 text-[11px]" disabled={saveLimits.isPending} onClick={() => saveLimits.mutate()}>
+              {saveLimits.isPending ? "…" : t("common.save", "Save")}
+            </Button>
+          </div>
+        </details>
+
         <div className="flex justify-end gap-1 pt-1">
           <Button variant="outline" className="h-7 px-2 text-[11px]" onClick={onDelete}>{t("common.delete", "delete")}</Button>
         </div>

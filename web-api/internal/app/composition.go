@@ -16,12 +16,14 @@ import (
 	formatcmd "github.com/example/dddcqrs/internal/app/command/formats"
 	pipecmd "github.com/example/dddcqrs/internal/app/command/pipeline"
 	projcmd "github.com/example/dddcqrs/internal/app/command/projects"
+	schcmd "github.com/example/dddcqrs/internal/app/command/scheduler"
 	appmw "github.com/example/dddcqrs/internal/app/middleware"
 	"github.com/example/dddcqrs/internal/app/query"
 	audioq "github.com/example/dddcqrs/internal/app/query/audiolib"
 	formatq "github.com/example/dddcqrs/internal/app/query/formats"
 	pipeq "github.com/example/dddcqrs/internal/app/query/pipeline"
 	projq "github.com/example/dddcqrs/internal/app/query/projects"
+	schq "github.com/example/dddcqrs/internal/app/query/scheduler"
 	"github.com/example/dddcqrs/internal/infrastructure/audiosource"
 	"github.com/example/dddcqrs/internal/infrastructure/config"
 	"github.com/example/dddcqrs/internal/infrastructure/persistence/read"
@@ -81,6 +83,12 @@ func Build(cfg *config.Config) *do.RootScope {
 	do.Provide(i, func(inj do.Injector) (formatq.ReadModel, error) {
 		rp := do.MustInvoke[*postgres.ReadPool](inj)
 		return read.NewFormatsModel(rp.Pool), nil
+	})
+
+	// Scheduler read model on the READ pool.
+	do.Provide(i, func(inj do.Injector) (schq.ReadModel, error) {
+		rp := do.MustInvoke[*postgres.ReadPool](inj)
+		return read.NewSchedulerModel(rp), nil
 	})
 
 	// URL fetcher + Pixabay scraper for the audio library.
@@ -214,6 +222,15 @@ func Build(cfg *config.Config) *do.RootScope {
 		projq.GetProjectDetailOnBus(reg, pjm)
 		projq.ListProjectSocialAccountsOnBus(reg, pjm)
 		projq.ListSocialAccountsGlobalOnBus(reg, pjm)
+		projcmd.SetSocialAccountLimitsOnBus(reg, m)
+
+		// Scheduler.
+		schm := do.MustInvoke[schq.ReadModel](inj)
+		schcmd.ScheduleUploadOnBus(reg, m)
+		schcmd.CancelScheduledUploadOnBus(reg, m)
+		schcmd.RescheduleUploadOnBus(reg, m)
+		schq.ListScheduledOnBus(reg, schm)
+		schq.GetSlotAvailabilityOnBus(reg, schm)
 
 		return reg, nil
 	})
