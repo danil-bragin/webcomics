@@ -25,8 +25,19 @@ function isoToLocal(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Platforms with strict vertical-only requirements. If video aspect != 9:16
+// at schedule time, surface a warning that the platform will reject / crop.
+const VERTICAL_ONLY = new Set(["instagram_selenium", "tiktok_selenium"]);
+
+function isVertical9x16(w?: number, h?: number): boolean {
+  if (!w || !h) return false;
+  const ratio = w / h;
+  return Math.abs(ratio - 9 / 16) < 0.05; // small tolerance
+}
+
 export function ScheduleUploadModal({
-  runId, accounts, defaultAccountId, onClose, onScheduled, initialAt, runVideoKey, runCaptions, runPrompt,
+  runId, accounts, defaultAccountId, onClose, onScheduled, initialAt,
+  runVideoKey, runCaptions, runPrompt, runWidth, runHeight,
 }: {
   runId: string;
   accounts: SocialAccountView[];
@@ -37,6 +48,8 @@ export function ScheduleUploadModal({
   runVideoKey?: string;
   runCaptions?: string[];
   runPrompt?: string;
+  runWidth?: number;
+  runHeight?: number;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -161,6 +174,21 @@ export function ScheduleUploadModal({
             ) : null}
           </div>
         ) : null}
+
+        {(() => {
+          const acct = accounts.find((a) => a.id === accountId);
+          const wantVertical = acct && VERTICAL_ONLY.has(acct.platform);
+          if (wantVertical && runWidth && runHeight && !isVertical9x16(runWidth, runHeight)) {
+            return (
+              <div className="rounded border border-amber-500/40 bg-amber-500/10 text-amber-200 text-xs p-2">
+                {t("schedule.aspectWarn",
+                  "Видео {{w}}×{{h}}. {{platform}} требует 9:16 (1080×1920). Загрузка может быть отклонена или обрезана.",
+                  { w: runWidth, h: runHeight, platform: acct.platform.replace("_selenium", "") })}
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {blocked ? (
           <div className="rounded border border-amber-500/40 bg-amber-500/10 text-amber-200 text-xs p-2 space-y-1">

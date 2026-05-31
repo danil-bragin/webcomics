@@ -8,13 +8,15 @@ import { Button } from "@/components/ui/button";
 import { CardSkeletonGrid } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 
-// Platforms available on the global library page. YouTube is the only live
-// one today; others render as "coming soon" tabs so the IA reads correctly.
-const PLATFORMS: { id: string; label: string; live: boolean }[] = [
-  { id: "youtube_selenium", label: "YouTube", live: true },
-  { id: "telegram", label: "Telegram", live: false },
-  { id: "instagram", label: "Instagram", live: false },
-  { id: "tiktok", label: "TikTok", live: false },
+// Selenium-based platforms. Each connect flow opens a Firefox container the
+// operator logs into manually; the cookie profile is saved to disk and used
+// by the upload worker. Default daily upload caps reflect each platform's
+// soft-ban thresholds for new/unverified accounts.
+const PLATFORMS: { id: string; label: string; live: boolean; defaultLimit: number }[] = [
+  { id: "youtube_selenium",   label: "YouTube",   live: true, defaultLimit: 15 },
+  { id: "instagram_selenium", label: "Instagram", live: true, defaultLimit: 25 },
+  { id: "tiktok_selenium",    label: "TikTok",    live: true, defaultLimit: 10 },
+  { id: "facebook_selenium",  label: "Facebook",  live: true, defaultLimit: 25 },
 ];
 
 function fmtAgo(ts?: string | null): string {
@@ -247,8 +249,18 @@ function AddAccountModal({ platform, onClose, onCreated }: { platform: string; o
     onError: (e: Error) => toast.push("error", e.message),
   });
 
+  const platformMeta = PLATFORMS.find((p) => p.id === platform);
   const finish = useMutation({
-    mutationFn: () => api.fxFinish(session!.id, { label: label || undefined }),
+    mutationFn: async () => {
+      const res = await api.fxFinish(session!.id, { label: label || undefined });
+      // Apply platform-default daily limit on first connect (best-effort).
+      if (res?.social_account_id && platformMeta) {
+        try {
+          await api.patchSocialAccountLimits(res.social_account_id, { daily_upload_limit: platformMeta.defaultLimit });
+        } catch { /* ignore — limits can be edited from the card */ }
+      }
+      return res;
+    },
     onSuccess: () => onCreated(),
     onError: (e: Error) => toast.push("error", e.message),
   });

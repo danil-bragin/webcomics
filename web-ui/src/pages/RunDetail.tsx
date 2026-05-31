@@ -720,6 +720,16 @@ function RunScheduleModal({ runId, run, onClose, onScheduled }: {
     }
     return [];
   })();
+  // Pull width/height from the assemble step's input.params so the modal can
+  // warn when a horizontal video targets a vertical-only platform (IG/TT).
+  const [width, height] = (() => {
+    for (const s of run.steps) {
+      if (s.type !== "assemble") continue;
+      const params = (s.input as { params?: { width?: number; height?: number } } | undefined)?.params;
+      if (params?.width && params?.height) return [params.width, params.height];
+    }
+    return [undefined, undefined];
+  })();
   if (accounts.isLoading) return null;
   return (
     <ScheduleUploadModal
@@ -730,6 +740,8 @@ function RunScheduleModal({ runId, run, onClose, onScheduled }: {
       runVideoKey={videoKey}
       runCaptions={captions}
       runPrompt={run.prompt}
+      runWidth={width}
+      runHeight={height}
     />
   );
 }

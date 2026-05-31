@@ -103,15 +103,16 @@ class UploadHandler:
         start = time.perf_counter()
         screenshot_asset_id = ""
         try:
-            if provider == "youtube_selenium":
+            if provider.endswith("_selenium"):
                 if not firefox_profile:
-                    raise RuntimeError("firefox_profile_path required for youtube_selenium")
+                    raise RuntimeError(f"firefox_profile_path required for {provider}")
                 # Clone profile to a temp dir so two Firefox instances can run
                 # concurrently. Firefox holds an OS-level lock on parent.lock —
                 # without cloning, every upload after the first stalls.
                 cloned_profile = _clone_profile(firefox_profile, run_id)
                 try:
-                    result = await self._upload_youtube_selenium(
+                    result = await self._upload_selenium(
+                        provider=provider,
                         run_id=run_id,
                         video_key=video_key,
                         firefox_profile=cloned_profile,
@@ -180,8 +181,9 @@ class UploadHandler:
         ctx.info("upload done", external_ref=external_ref, duration_ms=duration_ms,
                  final_visibility=final_visibility)
 
-    async def _upload_youtube_selenium(
+    async def _upload_selenium(
         self,
+        provider: str,
         run_id: str,
         video_key: str,
         firefox_profile: str,
@@ -189,14 +191,17 @@ class UploadHandler:
         params: dict,
     ) -> dict[str, Any]:
         if not firefox_profile:
-            raise RuntimeError("firefox_profile_path required for youtube_selenium")
-
-        meta = _resolve_metadata(captions, params)
-
+            raise RuntimeError(f"firefox_profile_path required for {provider}")
+        # Per-platform caption block, falling back to YT if the caption worker
+        # hasn't fanned out yet. Keeps backward compat with the existing flow.
+        platform_key = provider.replace("_selenium", "")
+        platform_captions = captions.get(platform_key) or captions.get("youtube") or {}
+        meta = _resolve_metadata({platform_key: platform_captions, "youtube": platform_captions}, params)
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
-            lambda: _do_youtube_upload(
+            lambda: _do_selenium_upload(
+                provider=provider,
                 video_key=video_key,
                 store=self.store,
                 firefox_profile=firefox_profile,
@@ -305,47 +310,75 @@ def _clone_profile(src: str, run_id: str) -> str:
     return dst
 
 
-def _do_youtube_upload(
+def _do_selenium_upload(
+    provider: str,
     video_key: str,
     store: ObjectStore,
     firefox_profile: str,
     meta: dict[str, Any],
     run_id: str,
 ) -> dict[str, Any]:
-    """Blocking helper executed in worker thread."""
-    from worker.providers.selenium_youtube import (
-        YouTubeUploadConfig,
-        download_video_to_tempfile,
-        upload_to_youtube,
-    )
+    """Blocking helper executed in worker thread. Dispatches by provider."""
+    if provider == "youtube_selenium":
+        from worker.providers.selenium_youtube import (
+            YouTubeUploadConfig,
+            download_video_to_tempfile,
+            upload_to_youtube,
+        )
+        local_path = download_video_to_tempfile(store, video_key)
+        screenshot_dir = f"/tmp/upload-screenshots/{run_id}"
+        try:
+            cfg = YouTubeUploadConfig(
+                firefox_profile_path=firefox_profile,
+                video_path=local_path,
+                title=meta.get("title") or "Generated comic",
+                description=meta.get("description") or "",
+                tags=list(meta.get("tags") or []),
+                made_for_kids=bool(meta.get("made_for_kids", False)),
+                age_restriction=str(meta.get("age_restriction") or "none"),
+                category_id=str(meta.get("category_id") or "22"),
+                category_label=str(meta.get("category_label") or "People & Blogs"),
+                comments_enabled=bool(meta.get("comments_enabled", True)),
+                visibility=str(meta.get("visibility") or "unlisted"),
+                scheduled_at=str(meta.get("scheduled_at") or ""),
+                playlist_names=list(meta.get("playlist_names") or []),
+                thumbnail_path=str(meta.get("thumbnail_path") or ""),
+                headless=bool(meta.get("headless", True)),
+                screenshot_dir=screenshot_dir,
+            )
+            result = upload_to_youtube(cfg)
+            return {
+                "video_url": result.video_url,
+                "video_id": result.video_id,
+                "final_visibility": result.final_visibility,
+            }
+        finally:
+            try:
+                os.unlink(local_path)
+            except OSError:
+                pass
 
+    # Other selenium providers share a thin contract: download the video,
+    # hand a config dict to the provider module, get back {video_url, video_id,
+    # final_visibility}.
+    from worker.providers import selenium_instagram, selenium_tiktok, selenium_facebook
+    from worker.providers.selenium_youtube import download_video_to_tempfile
+    impl = {
+        "instagram_selenium": selenium_instagram.upload,
+        "tiktok_selenium":    selenium_tiktok.upload,
+        "facebook_selenium":  selenium_facebook.upload,
+    }.get(provider)
+    if impl is None:
+        raise ValueError(f"unknown selenium provider: {provider}")
     local_path = download_video_to_tempfile(store, video_key)
     screenshot_dir = f"/tmp/upload-screenshots/{run_id}"
     try:
-        cfg = YouTubeUploadConfig(
-            firefox_profile_path=firefox_profile,
+        return impl(
+            firefox_profile=firefox_profile,
             video_path=local_path,
-            title=meta.get("title") or "Generated comic",
-            description=meta.get("description") or "",
-            tags=list(meta.get("tags") or []),
-            made_for_kids=bool(meta.get("made_for_kids", False)),
-            age_restriction=str(meta.get("age_restriction") or "none"),
-            category_id=str(meta.get("category_id") or "22"),
-            category_label=str(meta.get("category_label") or "People & Blogs"),
-            comments_enabled=bool(meta.get("comments_enabled", True)),
-            visibility=str(meta.get("visibility") or "unlisted"),
-            scheduled_at=str(meta.get("scheduled_at") or ""),
-            playlist_names=list(meta.get("playlist_names") or []),
-            thumbnail_path=str(meta.get("thumbnail_path") or ""),
-            headless=bool(meta.get("headless", True)),
+            meta=meta,
             screenshot_dir=screenshot_dir,
         )
-        result = upload_to_youtube(cfg)
-        return {
-            "video_url": result.video_url,
-            "video_id": result.video_id,
-            "final_visibility": result.final_visibility,
-        }
     finally:
         try:
             os.unlink(local_path)

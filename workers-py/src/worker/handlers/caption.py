@@ -40,7 +40,9 @@ class CaptionHandler:
             return
 
         params = dict(msg.get("params") or {})
-        platforms = params.get("platforms") or ["youtube", "twitter"]
+        # Default to all selenium-supported surfaces so a single run carries
+        # metadata for whichever account it's later scheduled onto.
+        platforms = params.get("platforms") or ["youtube", "instagram", "tiktok", "facebook"]
         if not isinstance(platforms, list):
             platforms = ["youtube"]
         caption_override = params.get("caption_override")
