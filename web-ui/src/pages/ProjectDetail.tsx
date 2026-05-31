@@ -19,15 +19,18 @@ async function uploadRef(file: File, kind: "character_ref" | "environment_ref"):
   return presign.asset_id;
 }
 
-function useAssetURL(assetId: string | undefined) {
-  const [url, setURL] = useState<string | null>(null);
-  useEffect(() => {
-    if (!assetId) return;
-    let alive = true;
-    api.getAssetUrl(assetId).then((r) => alive && setURL(r.url)).catch(() => alive && setURL(null));
-    return () => { alive = false; };
-  }, [assetId]);
-  return url;
+// Cached presigned-URL fetcher; see RunDetail.useAssetURL for rationale.
+function useAssetURL(assetId: string | undefined): string | null {
+  const q = useQuery({
+    queryKey: ["asset-url", assetId],
+    queryFn: () => api.getAssetUrl(assetId!),
+    enabled: !!assetId,
+    staleTime: 4 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  return q.data?.url ?? null;
 }
 
 function RefThumb({ assetId, onRemove }: { assetId: string; onRemove?: () => void }) {

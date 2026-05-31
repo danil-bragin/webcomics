@@ -220,7 +220,7 @@ export function Dashboard() {
           {series.map((d) => {
             const h = (d.v / max) * 100;
             return (
-              <div key={d.date} className="flex-1 flex flex-col items-center justify-end" title={`${d.date}: ${fmtMoney(d.v)}`}>
+              <div key={d.date} className="flex-1 h-full flex flex-col items-center justify-end" title={`${d.date}: ${fmtMoney(d.v)}`}>
                 {d.v > 0 ? (
                   <div className="w-full bg-blue-500/70 rounded-t" style={{ height: `${Math.max(2, h)}%` }} />
                 ) : (

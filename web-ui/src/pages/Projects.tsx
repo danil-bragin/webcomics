@@ -69,7 +69,20 @@ export function Projects() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {items.map((p) => (
-              <ProjectCard key={p.id} project={p} />
+              <ProjectCard
+                key={p.id}
+                project={p}
+                onDelete={async () => {
+                  if (!confirm(t("projects.confirmDelete", "Delete project '{{name}}'? Cascades runs, assets, links. Not reversible.", { name: p.name }))) return;
+                  try {
+                    await api.deleteProject(p.id);
+                    qc.invalidateQueries({ queryKey: ["projects"] });
+                    toast.push("success", t("projects.deleted", "Project deleted"));
+                  } catch (e) {
+                    toast.push("error", (e as Error).message);
+                  }
+                }}
+              />
             ))}
           </div>
         )}
@@ -78,7 +91,7 @@ export function Projects() {
   );
 }
 
-function ProjectCard({ project: p }: { project: ProjectView }) {
+function ProjectCard({ project: p, onDelete }: { project: ProjectView; onDelete: () => void }) {
   const { t, i18n } = useTranslation();
   const initial = (p.name?.trim()?.[0] ?? "?").toUpperCase();
   const updated = new Date(p.updated_at).toLocaleDateString(i18n.resolvedLanguage, {
@@ -89,8 +102,17 @@ function ProjectCard({ project: p }: { project: ProjectView }) {
   return (
     <Link
       to={`/projects/${p.id}`}
-      className="group rounded-lg border border-border bg-card hover:border-primary/50 transition-colors flex flex-col overflow-hidden"
+      className="group relative rounded-lg border border-border bg-card hover:border-primary/50 transition-colors flex flex-col overflow-hidden"
     >
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
+        className="absolute top-2 right-2 z-10 w-6 h-6 rounded bg-background/80 border border-border opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center text-xs text-red-400 hover:bg-red-500/10"
+        title={t("common.delete", "delete")}
+        aria-label="delete project"
+      >
+        ×
+      </button>
       <div className="p-4 flex items-start gap-3">
         <div className="w-10 h-10 rounded-md bg-primary/15 text-primary flex items-center justify-center text-base font-semibold shrink-0">
           {initial}

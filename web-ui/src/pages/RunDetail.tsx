@@ -10,19 +10,22 @@ import { fmtDuration, fmtMoney, statusVariant } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { useEffect, useMemo, useState } from "react";
 
-function useAssetURL(assetId: string | undefined) {
-  const [url, setURL] = useState<string | null>(null);
-  useEffect(() => {
-    if (!assetId) return;
-    let alive = true;
-    api.getAssetUrl(assetId).then((r) => {
-      if (alive) setURL(r.url);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [assetId]);
-  return url;
+// Cached presigned-URL fetcher. Presigned URLs live 5 min on the API side, so
+// staleTime=4m means tab switches + parent re-renders reuse the same URL
+// instead of firing a fresh round trip per panel. Without this, opening a run
+// with 5 panels triggered 5 presign + 5 image fetches every mount, which felt
+// like the page was hanging on first paint.
+function useAssetURL(assetId: string | undefined): string | null {
+  const q = useQuery({
+    queryKey: ["asset-url", assetId],
+    queryFn: () => api.getAssetUrl(assetId!),
+    enabled: !!assetId,
+    staleTime: 4 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  return q.data?.url ?? null;
 }
 
 function StepTimeline({ run }: { run: RunView }) {

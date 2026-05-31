@@ -35,11 +35,19 @@ type Provider struct {
 	Error     string  `json:"error,omitempty"`
 }
 
-// Client owns API keys + a shared http.Client.
+// Client owns API keys + a shared http.Client. Snapshot results are cached
+// 15s server-side so the dashboard (which polls every 15s) doesn't pay the
+// ~2s provider-RTT cost on every page load or refocus.
 type Client struct {
 	cfg  *config.Config
 	http *http.Client
+
+	mu       sync.Mutex
+	cached   View
+	cachedAt time.Time
 }
+
+const balanceCacheTTL = 15 * time.Second
 
 func New(i do.Injector) (*Client, error) {
 	cfg := do.MustInvoke[*config.Config](i)
@@ -52,8 +60,18 @@ func New(i do.Injector) (*Client, error) {
 func (c *Client) HealthCheck() error { return nil }
 func (c *Client) Shutdown() error    { return nil }
 
-// Snapshot fetches every provider concurrently.
+// Snapshot fetches every provider concurrently. Result is cached for
+// balanceCacheTTL so the dashboard doesn't refire 3 provider HTTP calls per
+// page render.
 func (c *Client) Snapshot(ctx context.Context) View {
+	c.mu.Lock()
+	if !c.cachedAt.IsZero() && time.Since(c.cachedAt) < balanceCacheTTL {
+		v := c.cached
+		c.mu.Unlock()
+		return v
+	}
+	c.mu.Unlock()
+
 	out := View{Providers: make([]Provider, 3)}
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -61,6 +79,11 @@ func (c *Client) Snapshot(ctx context.Context) View {
 	go func() { defer wg.Done(); out.Providers[1] = c.fal(ctx) }()
 	go func() { defer wg.Done(); out.Providers[2] = c.elevenlabs(ctx) }()
 	wg.Wait()
+
+	c.mu.Lock()
+	c.cached = out
+	c.cachedAt = time.Now()
+	c.mu.Unlock()
 	return out
 }
 
