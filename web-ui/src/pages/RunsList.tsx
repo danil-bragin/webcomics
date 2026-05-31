@@ -193,47 +193,72 @@ function VideoTile({ assetId, status }: { assetId?: string; status: string }) {
   const { t } = useTranslation();
   const [url, setURL] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Lazy-mount via IntersectionObserver — without this every tile on /runs
+  // downloads a few MB of MP4 metadata up front (each video element forces
+  // a partial download to seek to the poster frame). With it, we only touch
+  // tiles the user actually scrolls to.
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [inView, setInView] = useState(false);
 
   useEffect(() => {
-    if (!assetId) return;
+    if (!wrapRef.current || inView) return;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          setInView(true);
+          io.disconnect();
+          break;
+        }
+      }
+    }, { rootMargin: "200px" });
+    io.observe(wrapRef.current);
+    return () => io.disconnect();
+  }, [inView]);
+
+  useEffect(() => {
+    if (!assetId || !inView) return;
     let alive = true;
     api.getAssetUrl(assetId).then((r) => alive && setURL(r.url)).catch(() => {});
     return () => { alive = false; };
-  }, [assetId]);
+  }, [assetId, inView]);
 
-  // Seek ~1s in: the renderer starts every comic with a ~280ms crossfade
-  // from black, so a 0.1s poster lands mid fade-in and looks like the
-  // thumbnail itself was dimmed. 1s is safely past the fade and still on
-  // the first panel for any reasonable panel duration.
+  // Seek ~1s in once metadata loads: the renderer opens with a ~280ms
+  // crossfade from black; a 0.1s poster would land mid-fade and look dimmed.
   const onLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
     const target = Math.min(1, Math.max(0.1, (v.duration || 2) * 0.25));
     try {
       v.currentTime = target;
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
   if (!assetId) {
     return (
-      <div className="aspect-square bg-secondary/20 flex items-center justify-center text-xs text-muted-foreground">
+      <div ref={wrapRef} className="aspect-square bg-secondary/20 flex items-center justify-center text-xs text-muted-foreground">
         {status === "running" || status === "queued" ? t("runs.rendering") : t("runs.noVideo")}
       </div>
     );
   }
-  if (!url) return <div className="aspect-square bg-secondary/40 animate-pulse" />;
+  if (!inView || !url) {
+    return <div ref={wrapRef} className="aspect-square bg-secondary/40 animate-pulse" />;
+  }
 
-  // Use the poster-only first frame on the list — no hover-play, no darken
-  // overlay. Real playback lives on the run detail page.
+  // Tile is in viewport + we have the URL: mount the <video>. preload=metadata
+  // is fine here because we only do this for tiles the user can actually see.
   return (
-    <video
-      ref={videoRef}
-      src={url}
-      className="aspect-square w-full object-cover bg-card"
-      muted
-      playsInline
-      preload="metadata"
-      onLoadedMetadata={onLoadedMetadata}
-    />
+    <div ref={wrapRef}>
+      <video
+        ref={videoRef}
+        src={url}
+        className="aspect-square w-full object-cover bg-card"
+        muted
+        playsInline
+        preload="metadata"
+        onLoadedMetadata={onLoadedMetadata}
+      />
+    </div>
   );
 }

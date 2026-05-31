@@ -141,7 +141,7 @@ function PanelTile({ index, prompt, caption, asset }: { index: number; prompt: s
     <div className="rounded border border-border overflow-hidden bg-secondary/20 group relative">
       {url ? (
         <button onClick={() => setLightbox(true)} className="block w-full">
-          <img src={url} alt={`panel ${index}`} className="aspect-square w-full object-cover" />
+          <img src={url} alt={`panel ${index}`} loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
         </button>
       ) : (
         <div className="aspect-square bg-secondary/40 animate-pulse" />
@@ -540,13 +540,15 @@ function RegenButton({ runId, step, open, setOpen, busy }:
 function VideoPlayer({ assetId }: { assetId: string }) {
   const url = useAssetURL(assetId);
   if (!url) return <div className="aspect-video rounded bg-secondary/30 animate-pulse" />;
-  return <video src={url} controls className="w-full rounded" />;
+  // preload=metadata is enough for the seek bar; full bytes only download
+  // when the user hits play. Saves an instant ~10MB on RunDetail mount.
+  return <video src={url} controls preload="metadata" className="w-full rounded" />;
 }
 
 function AudioPlayer({ assetId }: { assetId: string }) {
   const url = useAssetURL(assetId);
   if (!url) return <div className="h-10 rounded bg-secondary/30 animate-pulse" />;
-  return <audio src={url} controls className="w-full" />;
+  return <audio src={url} controls preload="metadata" className="w-full" />;
 }
 
 export function RunDetail() {

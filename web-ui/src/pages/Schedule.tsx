@@ -160,12 +160,25 @@ function VideoThumb({ assetId }: { assetId?: string }) {
   const { t } = useTranslation();
   const [url, setURL] = useState<string | null>(null);
   const ref = useRef<HTMLVideoElement | null>(null);
+  // Lazy mount via IntersectionObserver — same rationale as RunsList VideoTile.
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [inView, setInView] = useState(false);
   useEffect(() => {
-    if (!assetId) return;
+    if (!wrapRef.current || inView) return;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) { setInView(true); io.disconnect(); break; }
+      }
+    }, { rootMargin: "200px" });
+    io.observe(wrapRef.current);
+    return () => io.disconnect();
+  }, [inView]);
+  useEffect(() => {
+    if (!assetId || !inView) return;
     let alive = true;
     api.getAssetUrl(assetId).then((r) => alive && setURL(r.url)).catch(() => {});
     return () => { alive = false; };
-  }, [assetId]);
+  }, [assetId, inView]);
   const onLoadedMetadata = () => {
     const v = ref.current;
     if (!v) return;
@@ -174,15 +187,19 @@ function VideoThumb({ assetId }: { assetId?: string }) {
   };
   if (!assetId) {
     return (
-      <div className="aspect-square bg-secondary/20 flex items-center justify-center text-xs text-muted-foreground">
+      <div ref={wrapRef} className="aspect-square bg-secondary/20 flex items-center justify-center text-xs text-muted-foreground">
         {t("runs.noVideo", "no video")}
       </div>
     );
   }
-  if (!url) return <div className="aspect-square bg-secondary/40 animate-pulse" />;
+  if (!inView || !url) {
+    return <div ref={wrapRef} className="aspect-square bg-secondary/40 animate-pulse" />;
+  }
   return (
-    <video ref={ref} src={url} className="aspect-square w-full object-cover bg-card"
-      muted playsInline preload="metadata" onLoadedMetadata={onLoadedMetadata} />
+    <div ref={wrapRef}>
+      <video ref={ref} src={url} className="aspect-square w-full object-cover bg-card"
+        muted playsInline preload="metadata" onLoadedMetadata={onLoadedMetadata} />
+    </div>
   );
 }
 
