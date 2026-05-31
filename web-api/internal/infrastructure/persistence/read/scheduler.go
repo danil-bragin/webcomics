@@ -16,7 +16,18 @@ type SchedulerModel struct{ pool *postgres.ReadPool }
 
 func NewSchedulerModel(pool *postgres.ReadPool) *SchedulerModel { return &SchedulerModel{pool: pool} }
 
-const schedListCols = `s.id, s.run_id, COALESCE(r.prompt,''), s.social_account_id,
+// schedListCols also surfaces the run's latest video asset id (for thumbnails)
+// + the run cost/status (so the /schedule card can echo the RunsList look).
+// The video sub-select returns the most-recent video asset for the run.
+const schedListCols = `s.id, s.run_id, COALESCE(r.prompt,''),
+       COALESCE((
+         SELECT pa.id FROM pipeline_assets pa
+          WHERE pa.run_id = s.run_id AND pa.kind = 'video'
+          ORDER BY pa.created_at DESC LIMIT 1
+       ), '') AS run_video_asset_id,
+       COALESCE(r.total_cost_usd, 0) AS run_cost,
+       COALESCE(r.status, '') AS run_status,
+       s.social_account_id,
        COALESCE(a.label,''), COALESCE(a.platform,''),
        s.scheduled_at, s.status, COALESCE(s.external_ref,''), COALESCE(s.error,''),
        s.fired_at, s.completed_at, s.created_at`
@@ -59,7 +70,9 @@ func (m *SchedulerModel) List(ctx context.Context, f schq.ListFilter) ([]schq.Vi
 	out := []schq.View{}
 	for rows.Next() {
 		var v schq.View
-		if err := rows.Scan(&v.ID, &v.RunID, &v.RunPrompt, &v.SocialAccountID,
+		if err := rows.Scan(&v.ID, &v.RunID, &v.RunPrompt,
+			&v.RunVideoAssetID, &v.RunCostUSD, &v.RunStatus,
+			&v.SocialAccountID,
 			&v.AccountLabel, &v.AccountPlatform,
 			&v.ScheduledAt, &v.Status, &v.ExternalRef, &v.Error,
 			&v.FiredAt, &v.CompletedAt, &v.CreatedAt); err != nil {
@@ -78,7 +91,9 @@ func (m *SchedulerModel) Get(ctx context.Context, id string) (schq.View, error) 
 		   LEFT JOIN pipeline_runs    r ON r.id = s.run_id
 		   LEFT JOIN social_accounts  a ON a.id = s.social_account_id
 		  WHERE s.id = $1`, id)
-	err := row.Scan(&v.ID, &v.RunID, &v.RunPrompt, &v.SocialAccountID,
+	err := row.Scan(&v.ID, &v.RunID, &v.RunPrompt,
+		&v.RunVideoAssetID, &v.RunCostUSD, &v.RunStatus,
+		&v.SocialAccountID,
 		&v.AccountLabel, &v.AccountPlatform,
 		&v.ScheduledAt, &v.Status, &v.ExternalRef, &v.Error,
 		&v.FiredAt, &v.CompletedAt, &v.CreatedAt)

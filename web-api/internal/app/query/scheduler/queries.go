@@ -9,19 +9,22 @@ import (
 
 // View is the flat read DTO for scheduler rows.
 type View struct {
-	ID              string    `json:"id"`
-	RunID           string    `json:"run_id"`
-	RunPrompt       string    `json:"run_prompt"`
-	SocialAccountID string    `json:"social_account_id"`
-	AccountLabel    string    `json:"account_label"`
-	AccountPlatform string    `json:"account_platform"`
-	ScheduledAt     time.Time `json:"scheduled_at"`
-	Status          string    `json:"status"`
-	ExternalRef     string    `json:"external_ref,omitempty"`
-	Error           string    `json:"error,omitempty"`
-	FiredAt         *time.Time `json:"fired_at,omitempty"`
-	CompletedAt     *time.Time `json:"completed_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID                string     `json:"id"`
+	RunID             string     `json:"run_id"`
+	RunPrompt         string     `json:"run_prompt"`
+	RunVideoAssetID   string     `json:"run_video_asset_id,omitempty"`
+	RunCostUSD        float64    `json:"run_cost_usd,omitempty"`
+	RunStatus         string     `json:"run_status,omitempty"`
+	SocialAccountID   string     `json:"social_account_id"`
+	AccountLabel      string     `json:"account_label"`
+	AccountPlatform   string     `json:"account_platform"`
+	ScheduledAt       time.Time  `json:"scheduled_at"`
+	Status            string     `json:"status"`
+	ExternalRef       string     `json:"external_ref,omitempty"`
+	Error             string     `json:"error,omitempty"`
+	FiredAt           *time.Time `json:"fired_at,omitempty"`
+	CompletedAt       *time.Time `json:"completed_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
 }
 
 // AccountWindowStats reports how many uploads are queued/in-flight/completed

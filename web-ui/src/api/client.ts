@@ -48,6 +48,9 @@ export type ScheduledUploadView = {
   id: string;
   run_id: string;
   run_prompt: string;
+  run_video_asset_id?: string;
+  run_cost_usd?: number;
+  run_status?: string;
   social_account_id: string;
   account_label: string;
   account_platform: string;

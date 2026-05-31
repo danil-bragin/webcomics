@@ -679,6 +679,7 @@ export function RunDetail() {
         <StepCard key={s.id} runId={id} step={s} assets={run.assets ?? []} busy={!!busy} />
       ))}
       <UploadRecordsCard runId={id} />
+      <RunScheduleCard runId={id} />
       {scheduleOpen ? (
         <RunScheduleModal
           runId={id}
@@ -965,5 +966,76 @@ function UploadMetadataEditor({ rec, onSaved }: { rec: UploadRecordView; onSaved
         </Button>
       </div>
     </div>
+  );
+}
+
+// RunScheduleCard lists scheduled_uploads tied to this run + their state +
+// any external_ref captured by the upload worker. Empty when nothing was
+// scheduled — keeps the run page free of clutter unless the operator queued
+// uploads.
+function RunScheduleCard({ runId }: { runId: string }) {
+  const { t, i18n } = useTranslation();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const q = useQuery({
+    queryKey: ["scheduled-by-run", runId],
+    queryFn: () => api.listScheduled({ limit: 100 }).then((all) => all.filter((r) => r.run_id === runId)),
+    refetchInterval: 10_000,
+  });
+  const cancel = useMutation({
+    mutationFn: (id: string) => api.cancelScheduled(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["scheduled-by-run", runId] }); toast.push("success", t("schedule.cancelled", "Cancelled")); },
+    onError: (e: Error) => toast.push("error", e.message),
+  });
+  const rows = q.data ?? [];
+  if (rows.length === 0) return null;
+  const pending = rows.filter((r) => r.status === "pending" || r.status === "in_flight");
+  const done = rows.filter((r) => r.status === "completed");
+  const failed = rows.filter((r) => r.status === "failed" || r.status === "cancelled");
+  return (
+    <Card>
+      <CardHeader className="py-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm">
+            {t("runs.scheduleSection", "Scheduled & uploaded")}
+          </CardTitle>
+          <span className="text-xs text-muted-foreground">
+            {t("schedule.totalsCount", "{{p}} pending · {{d}} done · {{f}} failed", { p: pending.length, d: done.length, f: failed.length })}
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <ul className="divide-y divide-border">
+          {rows.map((r) => (
+            <li key={r.id} className="py-2 flex items-center gap-2 text-sm">
+              <span className="text-xs tabular-nums w-32 shrink-0 text-muted-foreground">
+                {new Date(r.scheduled_at).toLocaleString(i18n.resolvedLanguage)}
+              </span>
+              <span className="text-xs text-muted-foreground w-40 shrink-0 truncate" title={r.account_label}>
+                {r.account_label || r.social_account_id.slice(0, 8)} · {r.account_platform}
+              </span>
+              <Badge variant={r.status === "completed" ? "default" : r.status === "failed" ? "danger" : "info"}>
+                {r.status}
+              </Badge>
+              {r.external_ref ? (
+                <a href={r.external_ref} target="_blank" rel="noreferrer" className="text-[11px] text-primary underline truncate flex-1">
+                  {r.external_ref}
+                </a>
+              ) : (
+                <span className="flex-1 text-[11px] text-muted-foreground truncate">
+                  {r.error ? r.error : "—"}
+                </span>
+              )}
+              {r.status === "pending" ? (
+                <Button variant="outline" className="h-7 px-2 text-[11px] text-red-400"
+                  onClick={() => { if (confirm(t("schedule.confirmCancel", "Cancel this scheduled upload?"))) cancel.mutate(r.id); }}>
+                  {t("schedule.cancel", "cancel")}
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }
