@@ -5,7 +5,11 @@ import type { components } from "./schema.gen";
 export type StepConfig = components["schemas"]["StepConfig"];
 export type TemplateView = components["schemas"]["TemplateView"];
 export type TemplateBody = components["schemas"]["TemplateBody"];
-export type RunSummary = components["schemas"]["RunSummary"];
+// RunSummary backend now also ships first_image_asset_id (Phase: lazy thumbs);
+// widen the TS type until codegen catches up.
+export type RunSummary = components["schemas"]["RunSummary"] & {
+  first_image_asset_id?: string;
+};
 export type RunView = components["schemas"]["RunView"] & {
   project_id?: string;
   project_name?: string;

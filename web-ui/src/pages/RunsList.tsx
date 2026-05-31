@@ -123,6 +123,7 @@ export function RunsList() {
                 cost={r.total_cost_usd}
                 createdAt={r.created_at}
                 videoAssetId={r.video_asset_id}
+                imageAssetId={r.first_image_asset_id}
                 selectMode={selectMode}
                 picked={picked.has(r.id)}
                 onTogglePicked={togglePicked}
@@ -152,6 +153,7 @@ export function RunCard(props: {
   cost: number;
   createdAt: string;
   videoAssetId?: string;
+  imageAssetId?: string;
   selectMode?: boolean;
   picked?: boolean;
   onTogglePicked?: (id: string) => void;
@@ -176,7 +178,7 @@ export function RunCard(props: {
           {props.picked ? "✓" : ""}
         </div>
       ) : null}
-      <VideoTile assetId={props.videoAssetId} status={props.status} />
+      <VideoTile assetId={props.videoAssetId} imageAssetId={props.imageAssetId} status={props.status} />
       <div className="p-3 space-y-1">
         <div className="flex items-center justify-between gap-2">
           <Badge variant={statusVariant(props.status)}>{t(`runs.status.${props.status}`, props.status)}</Badge>
@@ -189,14 +191,14 @@ export function RunCard(props: {
   );
 }
 
-function VideoTile({ assetId, status }: { assetId?: string; status: string }) {
+function VideoTile({ assetId, imageAssetId, status }: { assetId?: string; imageAssetId?: string; status: string }) {
   const { t } = useTranslation();
+  // Prefer the cheap first-panel PNG (~200KB) over a partial MP4 download
+  // for the thumbnail. Falls back to the video element only if no panel
+  // image exists (e.g. silent-demo template).
+  const previewAssetId = imageAssetId || assetId;
   const [url, setURL] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  // Lazy-mount via IntersectionObserver — without this every tile on /runs
-  // downloads a few MB of MP4 metadata up front (each video element forces
-  // a partial download to seek to the poster frame). With it, we only touch
-  // tiles the user actually scrolls to.
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
 
@@ -204,11 +206,7 @@ function VideoTile({ assetId, status }: { assetId?: string; status: string }) {
     if (!wrapRef.current || inView) return;
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
-        if (e.isIntersecting) {
-          setInView(true);
-          io.disconnect();
-          break;
-        }
+        if (e.isIntersecting) { setInView(true); io.disconnect(); break; }
       }
     }, { rootMargin: "200px" });
     io.observe(wrapRef.current);
@@ -216,26 +214,20 @@ function VideoTile({ assetId, status }: { assetId?: string; status: string }) {
   }, [inView]);
 
   useEffect(() => {
-    if (!assetId || !inView) return;
+    if (!previewAssetId || !inView) return;
     let alive = true;
-    api.getAssetUrl(assetId).then((r) => alive && setURL(r.url)).catch(() => {});
+    api.getAssetUrl(previewAssetId).then((r) => alive && setURL(r.url)).catch(() => {});
     return () => { alive = false; };
-  }, [assetId, inView]);
+  }, [previewAssetId, inView]);
 
-  // Seek ~1s in once metadata loads: the renderer opens with a ~280ms
-  // crossfade from black; a 0.1s poster would land mid-fade and look dimmed.
   const onLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
     const target = Math.min(1, Math.max(0.1, (v.duration || 2) * 0.25));
-    try {
-      v.currentTime = target;
-    } catch {
-      // ignore
-    }
+    try { v.currentTime = target; } catch { /* ignore */ }
   };
 
-  if (!assetId) {
+  if (!previewAssetId) {
     return (
       <div ref={wrapRef} className="aspect-square bg-secondary/20 flex items-center justify-center text-xs text-muted-foreground">
         {status === "running" || status === "queued" ? t("runs.rendering") : t("runs.noVideo")}
@@ -245,9 +237,16 @@ function VideoTile({ assetId, status }: { assetId?: string; status: string }) {
   if (!inView || !url) {
     return <div ref={wrapRef} className="aspect-square bg-secondary/40 animate-pulse" />;
   }
-
-  // Tile is in viewport + we have the URL: mount the <video>. preload=metadata
-  // is fine here because we only do this for tiles the user can actually see.
+  // Image path — fast.
+  if (imageAssetId) {
+    return (
+      <div ref={wrapRef}>
+        <img src={url} alt="" loading="lazy" decoding="async"
+          className="aspect-square w-full object-cover bg-card" />
+      </div>
+    );
+  }
+  // Fallback to video poster frame when no image asset exists.
   return (
     <div ref={wrapRef}>
       <video

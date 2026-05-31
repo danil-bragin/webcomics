@@ -122,7 +122,8 @@ type RunSummary struct {
 	TotalCostUSD float64    `json:"total_cost_usd"`
 	CreatedAt    time.Time  `json:"created_at"`
 	FinishedAt   *time.Time `json:"finished_at,omitempty"`
-	VideoAssetID string     `json:"video_asset_id,omitempty"`
+	VideoAssetID      string `json:"video_asset_id,omitempty"`
+	FirstImageAssetID string `json:"first_image_asset_id,omitempty"`
 }
 
 type TemplateView struct {

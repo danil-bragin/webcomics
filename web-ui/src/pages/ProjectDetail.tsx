@@ -618,6 +618,7 @@ export function ProjectDetail() {
                 cost={r.total_cost_usd}
                 createdAt={r.created_at}
                 videoAssetId={r.video_asset_id}
+                imageAssetId={r.first_image_asset_id}
               />
             ))}
           </div>

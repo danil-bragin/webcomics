@@ -215,14 +215,24 @@ func (m *PipelineModel) fetchCosts(ctx context.Context, runID string) ([]pipelin
 }
 
 func (m *PipelineModel) ListRuns(ctx context.Context, f pipelineq.ListRunsFilter) ([]pipelineq.RunSummary, error) {
+	// first_image_asset_id: cheap thumbnail for the list view (~200KB PNG)
+	// vs. seeking into a multi-MB MP4. Falls back to video_asset_id if no
+	// image rendered yet (silent demos / early states).
 	q := `SELECT r.id, COALESCE(r.template_id,''), r.prompt, r.status, r.total_cost_usd,
-	             r.created_at, r.finished_at, COALESCE(v.id,'') AS video_asset_id
+	             r.created_at, r.finished_at,
+	             COALESCE(v.id,'') AS video_asset_id,
+	             COALESCE(p.id,'') AS first_image_asset_id
 	      FROM pipeline_runs r
 	      LEFT JOIN LATERAL (
 	          SELECT id FROM pipeline_assets
 	          WHERE run_id = r.id AND kind = 'video'
 	          ORDER BY created_at DESC LIMIT 1
-	      ) v ON true`
+	      ) v ON true
+	      LEFT JOIN LATERAL (
+	          SELECT id FROM pipeline_assets
+	          WHERE run_id = r.id AND kind = 'panel_image'
+	          ORDER BY object_key ASC LIMIT 1
+	      ) p ON true`
 	args := []any{f.Limit, f.Offset}
 	conds := []string{}
 	if len(f.Statuses) > 0 {
@@ -259,7 +269,7 @@ func (m *PipelineModel) scanSummaries(ctx context.Context, q string, args ...any
 		var s pipelineq.RunSummary
 		var finishedAt *time.Time
 		if err := rows.Scan(&s.ID, &s.TemplateID, &s.Prompt, &s.Status,
-			&s.TotalCostUSD, &s.CreatedAt, &finishedAt, &s.VideoAssetID); err != nil {
+			&s.TotalCostUSD, &s.CreatedAt, &finishedAt, &s.VideoAssetID, &s.FirstImageAssetID); err != nil {
 			return nil, err
 		}
 		s.FinishedAt = finishedAt
