@@ -159,6 +159,25 @@ async def run_music(cfg: settings.Settings) -> None:
         await bus.close()
 
 
+async def run_metrics(cfg: settings.Settings) -> None:
+    from worker.handlers.metrics import MetricsHandler
+
+    bus = Bus(
+        cfg.redis_url,
+        consumer_group=f"{cfg.consumer_group_prefix}-metrics",
+        consumer_name=cfg.consumer_name,
+    )
+    cancelled = CancelledRuns()
+    handler = MetricsHandler(bus, cancelled)
+    try:
+        await asyncio.gather(
+            bus.consume("pipeline.metrics.requested", handler.handle),
+            bus.watch_cancellations(cancelled),
+        )
+    finally:
+        await bus.close()
+
+
 async def run_upload(cfg: settings.Settings) -> None:
     from worker.handlers.upload import UploadHandler
 
@@ -212,6 +231,8 @@ async def amain() -> int:
         task = asyncio.create_task(run_music(cfg))
     elif cfg.worker_type == "upload":
         task = asyncio.create_task(run_upload(cfg))
+    elif cfg.worker_type == "metrics":
+        task = asyncio.create_task(run_metrics(cfg))
     else:
         log.error("unknown worker_type", worker_type=cfg.worker_type)
         return 2

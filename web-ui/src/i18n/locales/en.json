@@ -10,7 +10,8 @@
     "formats": "Formats",
     "audio": "Audio",
     "social": "Social",
-    "schedule": "Scheduler"
+    "schedule": "Scheduler",
+    "metrics": "Metrics"
   },
   "common": {
     "save": "Save",

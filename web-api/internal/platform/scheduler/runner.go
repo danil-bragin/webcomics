@@ -15,6 +15,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/example/dddcqrs/internal/domain/pipeline"
 	"github.com/example/dddcqrs/internal/domain/projects"
 	domsched "github.com/example/dddcqrs/internal/domain/scheduler"
 	"github.com/example/dddcqrs/internal/infrastructure/persistence/uow"
@@ -31,6 +32,15 @@ type Runner struct {
 	uow   uow.Manager
 	redis *redis.Client
 	log   *slog.Logger
+}
+
+// fireable bundles the schedule row + its account context + the freshly-
+// created UploadRecord id (so completion can map back without a JOIN).
+type fireable struct {
+	Row            *domsched.ScheduledUpload
+	AccountFP      string
+	Platform       string
+	UploadRecordID string
 }
 
 func New(u uow.Manager, r *redis.Client, log *slog.Logger) *Runner {
@@ -56,11 +66,6 @@ func (r *Runner) Run(ctx context.Context) {
 }
 
 func (r *Runner) tick(ctx context.Context) error {
-	type fireable struct {
-		Row       *domsched.ScheduledUpload
-		AccountFP string
-		Platform  string
-	}
 	var fireables []fireable
 
 	// 1) Pick due rows + their account info INSIDE a single UoW. Mark each
@@ -89,10 +94,32 @@ func (r *Runner) tick(ctx context.Context) error {
 			if err := repos.Scheduler().Save(ctx, row); err != nil {
 				return err
 			}
+			// Create pipeline_upload_records row so analytics ticker has a
+			// target to poll once the worker reports an external_ref.
+			// Metadata is sparse for scheduler-triggered uploads — the
+			// caption/title comes from the schedule row's metadata.params.
+			meta := pipeline.UploadMetadata{}
+			if params, ok := row.Metadata()["params"].(map[string]any); ok {
+				if v, ok := params["title"].(string); ok {
+					meta.Title = v
+				}
+				if v, ok := params["description"].(string); ok {
+					meta.Description = v
+				}
+				if v, ok := params["visibility"].(string); ok {
+					meta.Visibility = v
+				}
+			}
+			rec := pipeline.NewUploadRecord(row.RunID(), "", row.SocialAccountID(),
+				acct.Platform(), 99, meta)
+			if err := repos.UploadRecords().Save(ctx, rec); err != nil {
+				return err
+			}
 			fireables = append(fireables, fireable{
-				Row:       row,
-				AccountFP: acct.FirefoxProfilePath(),
-				Platform:  acct.Platform(),
+				Row:            row,
+				AccountFP:      acct.FirefoxProfilePath(),
+				Platform:       acct.Platform(),
+				UploadRecordID: rec.ID().String(),
 			})
 		}
 		return nil

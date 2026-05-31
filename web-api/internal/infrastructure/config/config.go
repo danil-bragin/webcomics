@@ -46,6 +46,10 @@ type Config struct {
 	FalAPIKey        string `env:"FAL_KEY" envDefault:""`
 	ElevenLabsAPIKey string `env:"ELEVENLABS_API_KEY" envDefault:""`
 	PixabayAPIKey    string `env:"PIXABAY_API_KEY" envDefault:""`
+	// YouTubeAPIKey enables the upload-metrics ticker to query the YT
+	// Data API v3 (videos.list) for public counts. No key → ticker skips
+	// YT rows and logs a warning. Get one in Google Cloud Console.
+	YouTubeAPIKey string `env:"YOUTUBE_API_KEY" envDefault:""`
 
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
 }

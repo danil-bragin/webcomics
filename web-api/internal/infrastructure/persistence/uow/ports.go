@@ -9,6 +9,8 @@ import (
 	"github.com/example/dddcqrs/internal/domain/pipeline"
 	"github.com/example/dddcqrs/internal/domain/projects"
 	"github.com/example/dddcqrs/internal/domain/scheduler"
+	"github.com/example/dddcqrs/internal/domain/uploadmetrics"
+	writerepo "github.com/example/dddcqrs/internal/infrastructure/persistence/write"
 	"github.com/example/dddcqrs/internal/domain/shared"
 	"github.com/example/dddcqrs/internal/domain/user"
 )
@@ -38,6 +40,18 @@ type FormatsWriteRepository interface {
 	Save(ctx context.Context, f *formats.Format) error
 	GetByID(ctx context.Context, id string) (*formats.Format, error)
 	Delete(ctx context.Context, id string) error
+}
+
+// MetricsDueRow is exposed here as an alias so callers can depend on the
+// uow contract without importing the concrete write/ package.
+type MetricsDueRow = writerepo.MetricsDueRow
+
+// MetricsWriteRepository persists upload analytics snapshots + denormalises
+// last-known counters onto pipeline_upload_records.
+type MetricsWriteRepository interface {
+	InsertSnapshot(ctx context.Context, s uploadmetrics.Snapshot) error
+	MarkFetchFailed(ctx context.Context, uploadRecordID, errMsg string, now time.Time) error
+	ListUploadsDueForMetrics(ctx context.Context, cutoff time.Time, limit int) ([]MetricsDueRow, error)
 }
 
 // SchedulerWriteRepository persists scheduled_uploads inside a UoW tx.

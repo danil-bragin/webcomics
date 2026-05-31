@@ -41,5 +41,6 @@ type Repositories interface {
 	AudioLib() AudioLibWriteRepository
 	Formats() FormatsWriteRepository
 	Scheduler() SchedulerWriteRepository
+	Metrics() MetricsWriteRepository
 	Outbox() OutboxRepository
 }

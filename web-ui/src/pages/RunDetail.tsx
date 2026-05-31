@@ -830,6 +830,7 @@ function UploadRecordCard({ rec, onChange }: { rec: UploadRecordView; onChange: 
           </Button>
         </div>
       </div>
+      {rec.external_ref ? <UploadMetricsRow rec={rec} /> : null}
       {rec.hook ? (
         <p className="text-[11px] text-muted-foreground italic">Hook: {rec.hook}</p>
       ) : null}
@@ -1049,5 +1050,79 @@ function RunScheduleCard({ runId }: { runId: string }) {
         </ul>
       </CardContent>
     </Card>
+  );
+}
+
+// UploadMetricsRow shows last-known counts + a tiny views sparkline. Hits the
+// metrics endpoint at most once per mount (cached by react-query). Clicking
+// expands a wider chart inline. Stays compact so the upload card stays scannable.
+function UploadMetricsRow({ rec }: { rec: UploadRecordView }) {
+  const { t, i18n } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const snaps = useQuery({
+    queryKey: ["upload-metrics", rec.id],
+    queryFn: () => api.listUploadMetrics(rec.id, 100),
+    refetchInterval: 60_000,
+  });
+  const series = (snaps.data ?? []).slice().reverse(); // ASC for chart
+  const views = rec.last_known_views ?? 0;
+  const likes = rec.last_known_likes ?? 0;
+  const comments = rec.last_known_comments ?? 0;
+  const lastFetched = rec.last_fetched_at ? new Date(rec.last_fetched_at) : null;
+  const fmt = (n: number) => n >= 1_000_000 ? (n/1e6).toFixed(1)+"M" : n >= 1_000 ? (n/1e3).toFixed(1)+"K" : String(n);
+  return (
+    <div className="rounded bg-secondary/15 border border-border/40 p-2 text-[11px] space-y-1">
+      <div className="flex items-center gap-3">
+        <Sparkline values={series.map((s) => s.views)} width={120} height={28} />
+        <div className="flex gap-3 text-foreground tabular-nums">
+          <span title={t("metrics.views","views")}>👁 {fmt(views)}</span>
+          <span title={t("metrics.likes","likes")}>♥ {fmt(likes)}</span>
+          <span title={t("metrics.comments","comments")}>💬 {fmt(comments)}</span>
+        </div>
+        {lastFetched ? (
+          <span className="text-muted-foreground text-[10px]">
+            {t("metrics.fetched", "fetched")} {lastFetched.toLocaleString(i18n.resolvedLanguage)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-[10px]">
+            {t("metrics.pending", "metrics pending")}
+          </span>
+        )}
+        {rec.fetch_error ? (
+          <span className="text-red-400 text-[10px]" title={rec.fetch_error}>fetch err</span>
+        ) : null}
+        <button onClick={() => setExpanded((v) => !v)} className="ml-auto text-muted-foreground hover:text-foreground">
+          {expanded ? "−" : t("metrics.detail", "details")}
+        </button>
+      </div>
+      {expanded && series.length > 0 ? (
+        <div className="space-y-1 pt-1 border-t border-border/30">
+          <Sparkline values={series.map((s) => s.views)} width={560} height={80} stroke="rgb(96,165,250)" />
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>{new Date(series[0].fetched_at).toLocaleString(i18n.resolvedLanguage)}</span>
+            <span>{series.length} {t("metrics.snapshots", "snapshots")}</span>
+            <span>{new Date(series[series.length-1].fetched_at).toLocaleString(i18n.resolvedLanguage)}</span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Sparkline({ values, width, height, stroke = "rgb(52,211,153)" }: {
+  values: number[]; width: number; height: number; stroke?: string;
+}) {
+  if (values.length < 2) {
+    return <svg width={width} height={height}><line x1={0} y1={height/2} x2={width} y2={height/2} stroke="rgba(255,255,255,0.1)" /></svg>;
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+  const step = width / Math.max(1, values.length - 1);
+  const pts = values.map((v, i) => `${(i * step).toFixed(1)},${(height - ((v - min) / range) * (height - 2) - 1).toFixed(1)}`).join(" ");
+  return (
+    <svg width={width} height={height} className="block">
+      <polyline points={pts} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />
+    </svg>
   );
 }

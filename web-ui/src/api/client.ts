@@ -44,6 +44,15 @@ export type FormatView = components["schemas"]["FormatView"];
 // Phase 1 backend now returns more fields (status, defaults, link metadata)
 // than the OpenAPI schema declares; widen the TS type here until codegen
 // catches up.
+export type MetricsSnapshotView = {
+  id: string;
+  fetched_at: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+};
+
 export type ScheduledUploadView = {
   id: string;
   run_id: string;
@@ -306,6 +315,10 @@ export const api = {
   patchSocialAccountLimits: (id: string, b: { daily_upload_limit?: number; limit_window_hours?: number; is_verified?: boolean; min_gap_seconds?: number }) =>
     request<void>(`/api/social/accounts/${id}/limits`, { method: "PATCH", body: JSON.stringify(b) }),
 
+  // Upload analytics snapshots (Phase 5).
+  listUploadMetrics: (uploadRecordId: string, limit = 200) =>
+    request<MetricsSnapshotView[]>(`/api/upload-records/${uploadRecordId}/metrics?limit=${limit}`),
+
   // Global social-accounts library (Phase 2). Project linking lives below.
   listSocialAccountsGlobal: (platform?: string) =>
     request<SocialAccountView[]>(`/api/social/accounts${platform ? `?platform=${encodeURIComponent(platform)}` : ""}`),
@@ -395,6 +408,13 @@ export type UploadRecordView = {
   finished_at?: string;
   created_at: string;
   updated_at: string;
+  // Analytics (Phase 5)
+  last_known_views?: number;
+  last_known_likes?: number;
+  last_known_comments?: number;
+  last_known_shares?: number;
+  last_fetched_at?: string | null;
+  fetch_error?: string;
 };
 
 export type AccountUploadStats = {

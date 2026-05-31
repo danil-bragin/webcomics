@@ -22,7 +22,10 @@ SELECT id, run_id, COALESCE(project_id,''), COALESCE(social_account_id,''), step
        COALESCE(metadata_overridden,false), COALESCE(audience_confidence,0),
        COALESCE(audience_reasoning,''), COALESCE(hook,''),
        COALESCE(screenshot_trail, '[]'::jsonb),
-       started_at, finished_at, created_at, updated_at
+       started_at, finished_at, created_at, updated_at,
+       COALESCE(last_known_views,0), COALESCE(last_known_likes,0),
+       COALESCE(last_known_comments,0), COALESCE(last_known_shares,0),
+       last_fetched_at, COALESCE(fetch_error,'')
 FROM pipeline_upload_records
 WHERE id = $1`
 
@@ -37,7 +40,10 @@ SELECT id, run_id, COALESCE(project_id,''), COALESCE(social_account_id,''), step
        COALESCE(metadata_overridden,false), COALESCE(audience_confidence,0),
        COALESCE(audience_reasoning,''), COALESCE(hook,''),
        COALESCE(screenshot_trail, '[]'::jsonb),
-       started_at, finished_at, created_at, updated_at
+       started_at, finished_at, created_at, updated_at,
+       COALESCE(last_known_views,0), COALESCE(last_known_likes,0),
+       COALESCE(last_known_comments,0), COALESCE(last_known_shares,0),
+       last_fetched_at, COALESCE(fetch_error,'')
 FROM pipeline_upload_records
 WHERE run_id = $1
 ORDER BY created_at ASC`
@@ -53,7 +59,10 @@ SELECT id, run_id, COALESCE(project_id,''), COALESCE(social_account_id,''), step
        COALESCE(metadata_overridden,false), COALESCE(audience_confidence,0),
        COALESCE(audience_reasoning,''), COALESCE(hook,''),
        COALESCE(screenshot_trail, '[]'::jsonb),
-       started_at, finished_at, created_at, updated_at
+       started_at, finished_at, created_at, updated_at,
+       COALESCE(last_known_views,0), COALESCE(last_known_likes,0),
+       COALESCE(last_known_comments,0), COALESCE(last_known_shares,0),
+       last_fetched_at, COALESCE(fetch_error,'')
 FROM pipeline_upload_records
 WHERE project_id = $1
 ORDER BY created_at DESC
@@ -70,7 +79,10 @@ SELECT id, run_id, COALESCE(project_id,''), COALESCE(social_account_id,''), step
        COALESCE(metadata_overridden,false), COALESCE(audience_confidence,0),
        COALESCE(audience_reasoning,''), COALESCE(hook,''),
        COALESCE(screenshot_trail, '[]'::jsonb),
-       started_at, finished_at, created_at, updated_at
+       started_at, finished_at, created_at, updated_at,
+       COALESCE(last_known_views,0), COALESCE(last_known_likes,0),
+       COALESCE(last_known_comments,0), COALESCE(last_known_shares,0),
+       last_fetched_at, COALESCE(fetch_error,'')
 FROM pipeline_upload_records
 WHERE social_account_id = $1
 ORDER BY created_at DESC
@@ -79,7 +91,7 @@ LIMIT $2 OFFSET $3`
 func scanUploadView(row pgx.Row) (pipelineq.UploadRecordView, error) {
 	var v pipelineq.UploadRecordView
 	var trailRaw []byte
-	var scheduledAt, startedAt, finishedAt *time.Time
+	var scheduledAt, startedAt, finishedAt, lastFetched *time.Time
 	if err := row.Scan(&v.ID, &v.RunID, &v.ProjectID, &v.SocialAccountID, &v.StepIndex,
 		&v.Status, &v.Provider, &v.PlatformTarget,
 		&v.Title, &v.Description, &v.Tags, &v.Hashtags,
@@ -90,9 +102,12 @@ func scanUploadView(row pgx.Row) (pipelineq.UploadRecordView, error) {
 		&v.MetadataOverridden, &v.AudienceConfidence,
 		&v.AudienceReasoning, &v.Hook,
 		&trailRaw,
-		&startedAt, &finishedAt, &v.CreatedAt, &v.UpdatedAt); err != nil {
+		&startedAt, &finishedAt, &v.CreatedAt, &v.UpdatedAt,
+		&v.LastKnownViews, &v.LastKnownLikes, &v.LastKnownComments, &v.LastKnownShares,
+		&lastFetched, &v.FetchError); err != nil {
 		return v, err
 	}
+	v.LastFetchedAt = lastFetched
 	_ = json.Unmarshal(trailRaw, &v.ScreenshotTrail)
 	v.ScheduledAt = scheduledAt
 	v.StartedAt = startedAt

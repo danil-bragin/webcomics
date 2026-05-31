@@ -39,6 +39,13 @@ type UploadRecordView struct {
 	FinishedAt             *time.Time `json:"finished_at,omitempty"`
 	CreatedAt              time.Time  `json:"created_at"`
 	UpdatedAt              time.Time  `json:"updated_at"`
+	// Analytics (Phase 2).
+	LastKnownViews         int64      `json:"last_known_views,omitempty"`
+	LastKnownLikes         int64      `json:"last_known_likes,omitempty"`
+	LastKnownComments      int64      `json:"last_known_comments,omitempty"`
+	LastKnownShares        int64      `json:"last_known_shares,omitempty"`
+	LastFetchedAt          *time.Time `json:"last_fetched_at,omitempty"`
+	FetchError             string     `json:"fetch_error,omitempty"`
 }
 
 // ScreenshotEntryView is one frame in the per-stage debug trail.

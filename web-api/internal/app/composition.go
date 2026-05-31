@@ -17,6 +17,7 @@ import (
 	pipecmd "github.com/example/dddcqrs/internal/app/command/pipeline"
 	projcmd "github.com/example/dddcqrs/internal/app/command/projects"
 	schcmd "github.com/example/dddcqrs/internal/app/command/scheduler"
+	umcmd "github.com/example/dddcqrs/internal/app/command/uploadmetrics"
 	appmw "github.com/example/dddcqrs/internal/app/middleware"
 	"github.com/example/dddcqrs/internal/app/query"
 	audioq "github.com/example/dddcqrs/internal/app/query/audiolib"
@@ -24,11 +25,14 @@ import (
 	pipeq "github.com/example/dddcqrs/internal/app/query/pipeline"
 	projq "github.com/example/dddcqrs/internal/app/query/projects"
 	schq "github.com/example/dddcqrs/internal/app/query/scheduler"
+	umq "github.com/example/dddcqrs/internal/app/query/uploadmetrics"
 	"github.com/example/dddcqrs/internal/infrastructure/audiosource"
 	"github.com/example/dddcqrs/internal/infrastructure/config"
 	"github.com/example/dddcqrs/internal/infrastructure/persistence/read"
 	"github.com/example/dddcqrs/internal/infrastructure/persistence/uow"
 	"github.com/example/dddcqrs/internal/infrastructure/storage/minio"
+	infraum "github.com/example/dddcqrs/internal/infrastructure/uploadmetrics"
+	"github.com/example/dddcqrs/internal/domain/uploadmetrics"
 	"github.com/example/dddcqrs/internal/platform/balances"
 	"github.com/example/dddcqrs/internal/platform/logger"
 	"github.com/example/dddcqrs/internal/platform/metrics"
@@ -91,6 +95,12 @@ func Build(cfg *config.Config) *do.RootScope {
 		return read.NewSchedulerModel(rp), nil
 	})
 
+	// Upload-metrics read model on the READ pool.
+	do.Provide(i, func(inj do.Injector) (umq.ReadModel, error) {
+		rp := do.MustInvoke[*postgres.ReadPool](inj)
+		return read.NewMetricsModel(rp), nil
+	})
+
 	// URL fetcher + Pixabay scraper for the audio library.
 	do.Provide(i, func(inj do.Injector) (audiocmd.URLFetcher, error) {
 		return audiosource.NewHTTPFetcher(), nil
@@ -108,6 +118,12 @@ func Build(cfg *config.Config) *do.RootScope {
 
 	// Balances dashboard client.
 	do.Provide(i, balances.New)
+
+	// YT metrics fetcher (public Data API v3).
+	do.Provide(i, func(inj do.Injector) (uploadmetrics.Fetcher, error) {
+		cfg := do.MustInvoke[*config.Config](inj)
+		return infraum.NewYouTubeFetcher(cfg.YouTubeAPIKey), nil
+	})
 
 	// The bus registry with separate command/query pipelines.
 	do.Provide(i, func(inj do.Injector) (*bus.Registry, error) {
@@ -231,6 +247,12 @@ func Build(cfg *config.Config) *do.RootScope {
 		schcmd.RescheduleUploadOnBus(reg, m)
 		schq.ListScheduledOnBus(reg, schm)
 		schq.GetSlotAvailabilityOnBus(reg, schm)
+
+		// Upload metrics.
+		ummodel := do.MustInvoke[umq.ReadModel](inj)
+		umcmd.RecordMetricsSnapshotOnBus(reg, m)
+		umcmd.RecordMetricsFailureOnBus(reg, m)
+		umq.ListSnapshotsOnBus(reg, ummodel)
 
 		return reg, nil
 	})

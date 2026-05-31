@@ -148,6 +148,34 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  worker-metrics:
+    build:
+      context: ./workers-py
+      dockerfile: Dockerfile.upload   # same image, has Firefox + selenium deps
+    environment:
+      WORKER_TYPE: metrics
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: webcomics
+      SELENIUM_HEADLESS: "true"
+      GECKODRIVER_PATH: /usr/local/bin/geckodriver
+    volumes:
+      - ./ops/firefox-profiles:/profiles:rw
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:8081/ready\").getcode()==200 else 1)'"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
   renderer:
     build: ./renderer-node
     environment:

@@ -66,6 +66,7 @@ func newPgxUoW(tx pgx.Tx) *pgxUoW {
 			audioLib:          writerepo.NewAudioRepository(tx),
 			formats:           writerepo.NewFormatsRepository(tx),
 			scheduler:         writerepo.NewSchedulerRepository(tx),
+			metrics:           writerepo.NewMetricsRepository(tx),
 			outbox:            outbox.NewRepository(tx),
 		},
 	}
@@ -98,6 +99,7 @@ type repositories struct {
 	audioLib          AudioLibWriteRepository
 	formats           FormatsWriteRepository
 	scheduler         SchedulerWriteRepository
+	metrics           MetricsWriteRepository
 	outbox            OutboxRepository
 }
 
@@ -111,4 +113,5 @@ func (r *repositories) Projects() ProjectsWriteRepository          { return r.pr
 func (r *repositories) AudioLib() AudioLibWriteRepository          { return r.audioLib }
 func (r *repositories) Formats() FormatsWriteRepository            { return r.formats }
 func (r *repositories) Scheduler() SchedulerWriteRepository        { return r.scheduler }
+func (r *repositories) Metrics() MetricsWriteRepository             { return r.metrics }
 func (r *repositories) Outbox() OutboxRepository                   { return r.outbox }

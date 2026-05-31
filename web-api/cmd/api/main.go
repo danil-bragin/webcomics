@@ -21,8 +21,10 @@ import (
 	"github.com/example/dddcqrs/internal/platform/balances"
 	"github.com/example/dddcqrs/internal/platform/metrics"
 	"github.com/example/dddcqrs/internal/platform/postgres"
+	"github.com/example/dddcqrs/internal/platform/metricsticker"
 	"github.com/example/dddcqrs/internal/platform/redis"
 	"github.com/example/dddcqrs/internal/platform/scheduler"
+	"github.com/example/dddcqrs/internal/domain/uploadmetrics"
 )
 
 // balancesAdapter satisfies httpiface.BalancesProvider so the http package
@@ -71,6 +73,16 @@ func main() {
 	schedCtx, cancelSched := context.WithCancel(context.Background())
 	schRunner := scheduler.New(do.MustInvoke[uow.Manager](i), rc.Client, log)
 	go schRunner.Run(schedCtx)
+
+	// Metrics ticker: polls upload counts at configurable cadence.
+	mtRunner := metricsticker.New(
+		do.MustInvoke[uow.Manager](i),
+		reg,
+		do.MustInvoke[uploadmetrics.Fetcher](i),
+		rc.Client,
+		log,
+	)
+	go mtRunner.Run(schedCtx)
 
 	go func() {
 		log.Info("http listening", "addr", srv.Addr)

@@ -19,6 +19,7 @@ import (
 
 	"github.com/example/dddcqrs/internal/app/bus"
 	pipecmd "github.com/example/dddcqrs/internal/app/command/pipeline"
+	umcmd "github.com/example/dddcqrs/internal/app/command/uploadmetrics"
 	"github.com/example/dddcqrs/internal/domain/pipeline"
 )
 
@@ -57,6 +58,8 @@ func (c *RawCompletionConsumer) Run(ctx context.Context) {
 		{"pipeline.upload.failed", c.handleStepFailed},
 		{"pipeline.caption.completed", c.handleCaption},
 		{"pipeline.caption.failed", c.handleStepFailed},
+		{"pipeline.metrics.completed", c.handleMetricsCompleted},
+		{"pipeline.metrics.failed", c.handleMetricsFailed},
 	}
 	for _, s := range streams {
 		go c.consume(ctx, s.stream, s.handler)
@@ -238,6 +241,52 @@ func (c *RawCompletionConsumer) handleUploadFailed(ctx context.Context, body []b
 		ScreenshotTrail: p.ScreenshotTrail,
 	})
 	return nil
+}
+
+// handleMetricsCompleted is the inverse of the Python metrics worker. The
+// worker publishes views/likes/comments/shares for a given upload_record_id;
+// we persist a snapshot row + denormalised last-known counters.
+func (c *RawCompletionConsumer) handleMetricsCompleted(ctx context.Context, body []byte) error {
+	var p struct {
+		UploadRecordID string         `json:"upload_record_id"`
+		Views          int64          `json:"views"`
+		Likes          int64          `json:"likes"`
+		Comments       int64          `json:"comments"`
+		Shares         int64          `json:"shares"`
+		Raw            map[string]any `json:"raw"`
+	}
+	if err := json.Unmarshal(body, &p); err != nil {
+		return err
+	}
+	if p.UploadRecordID == "" {
+		return nil
+	}
+	_, err := bus.Dispatch[umcmd.RecordMetricsSnapshotResult](ctx, c.reg, umcmd.RecordMetricsSnapshot{
+		UploadRecordID: p.UploadRecordID,
+		Views:          p.Views,
+		Likes:          p.Likes,
+		Comments:       p.Comments,
+		Shares:         p.Shares,
+		Raw:            p.Raw,
+	})
+	return err
+}
+
+func (c *RawCompletionConsumer) handleMetricsFailed(ctx context.Context, body []byte) error {
+	var p struct {
+		UploadRecordID string `json:"upload_record_id"`
+		Error          string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &p); err != nil {
+		return err
+	}
+	if p.UploadRecordID == "" {
+		return nil
+	}
+	_, err := bus.Dispatch[umcmd.RecordMetricsFailureResult](ctx, c.reg, umcmd.RecordMetricsFailure{
+		UploadRecordID: p.UploadRecordID, Error: p.Error,
+	})
+	return err
 }
 
 func (c *RawCompletionConsumer) handleStepFailed(ctx context.Context, body []byte) error {

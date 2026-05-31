@@ -11,6 +11,7 @@ import (
 	"github.com/example/dddcqrs/internal/app/bus"
 	pipecmd "github.com/example/dddcqrs/internal/app/command/pipeline"
 	pipeq "github.com/example/dddcqrs/internal/app/query/pipeline"
+	umq "github.com/example/dddcqrs/internal/app/query/uploadmetrics"
 	"github.com/example/dddcqrs/internal/domain/pipeline"
 )
 
@@ -131,6 +132,24 @@ func (s *Server) MountUploadRecords(r chi.Router) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"url": url})
+	})
+
+	r.Get("/api/upload-records/{id}/metrics", func(w http.ResponseWriter, req *http.Request) {
+		id := chi.URLParam(req, "id")
+		limit := 200
+		if v := req.URL.Query().Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				limit = n
+			}
+		}
+		out, err := bus.Ask[[]umq.SnapshotView](req.Context(), s.reg, umq.ListSnapshots{
+			UploadRecordID: id, Limit: limit,
+		})
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
 	})
 
 	r.Post("/api/upload-records/{id}/reject", func(w http.ResponseWriter, req *http.Request) {
