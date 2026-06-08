@@ -1,6 +1,23 @@
 # Webcomics
 
-A web-comics generation MVP. Prompt → LLM script → Flux-schnell images → Remotion MP4.
+A web-comics / short-video generation platform. Prompt → LLM script →
+Flux-schnell images → audio + music → Remotion MP4 → scheduled upload to
+YouTube / Instagram / TikTok / Facebook.
+
+## Features
+
+- **Generation pipeline** — script (OpenRouter) → panel images (fal.ai Flux
+  schnell) → narration audio + background music → Remotion MP4 assembly. The
+  step pipeline is data-driven, so new step types plug in without touching the
+  orchestrator core.
+- **Social accounts** — a global library of accounts shared across projects.
+- **Upload** — multi-platform publishing. YouTube via the **official Data API**
+  (OAuth, per-channel refresh tokens) with a **Selenium fallback** when the
+  daily API quota is exhausted; Instagram / TikTok / Facebook via Selenium.
+- **Scheduler** — per-account rate-limited upload scheduling with a recurring
+  tick.
+- **Metadata** — viral title/description generation via OpenRouter.
+- **Analytics** — per-upload metrics tracked over time.
 
 ## Architecture
 
@@ -12,31 +29,38 @@ Go API (web-api, DDD + CQRS, oapi-codegen spec-first)
         │ Postgres (write/read pools, transactional outbox)
         │ Redis Streams (Watermill)
         ▼
-Python workers (workers-py)     Node Remotion (renderer-node)
-   • script (OpenRouter)           • assemble (Remotion → MP4)
-   • image  (fal.ai Flux schnell)
-        ▼                            ▼
-        └────────── MinIO (S3-compat) ──────────┘
+Python workers (workers-py)         Node Remotion (renderer-node)
+   • script  (OpenRouter)              • assemble (Remotion → MP4)
+   • image   (fal.ai Flux schnell)
+   • audio   (narration / TTS)
+   • music   (background track)
+   • upload  (YouTube API / Selenium, IG / TikTok / FB)
+        ▼                                ▼
+        └──────────── MinIO (S3-compat) ────────────┘
 ```
 
-Bounded contexts and the full design live in `PLAN.md`.
+Bounded contexts and the full design live in `PLAN.md`. Per-feature specs
+live in `docs/specs/`; the YouTube API setup guide is `docs/youtube-api-setup.md`.
 
-## Required env (.env or shell)
+## Required env
+
+Copy the example files and fill in your own keys — the real `.env` files are
+gitignored and must never be committed:
 
 ```
-# OpenRouter — script step
-OPENROUTER_API_KEY=...
-SCRIPT_DEFAULT_MODEL=openai/gpt-4o-mini
-
-# fal.ai — image step
-FAL_KEY=...
-IMAGE_DEFAULT_MODEL=fal-ai/flux/schnell
-IMAGE_PRICE_USD=0.003
+cp .env.example .env                  # provider keys for the workers
+cp web-api/.env.example web-api/.env  # API config: DB, MinIO, keys, YouTube OAuth
 ```
 
-Ports are remapped to avoid conflicts with the user's existing local
-services: postgres `5433`, redis `6380`, minio `9000` (S3) and `9001`
-(console). Update `dev.compose.yml` if you want different ports.
+`.env.example` documents every variable. Provider keys (OpenRouter, fal.ai,
+ElevenLabs, Pixabay) are required for the matching pipeline step; leave a key
+blank to disable that step. YouTube API upload additionally needs
+`GOOGLE_OAUTH_CLIENT_ID/SECRET` — see `docs/youtube-api-setup.md`.
+
+Ports are remapped to avoid conflicts with existing local services: postgres
+`5433`, redis `6380`, minio `9000` (S3) and `9001` (console). The host-facing
+URLs in `web-api/.env.example` already use these ports. Update `dev.compose.yml`
+if you want different ones.
 
 ## Quick start (local, full stack)
 
@@ -64,9 +88,11 @@ the UI and the orchestrator.
 
 ```
 web-api/          Go DDD + CQRS backend
-workers-py/       Python script + image workers
+workers-py/       Python workers (script, image, audio, music, upload)
 renderer-node/    Node Remotion video assembler
 web-ui/           React + shadcn frontend
+docs/             design specs, runbook, YouTube API setup
+ops/              dev ops scripts, Grafana dashboard, music library, firefox profiles
 api/              cross-runtime artifacts (proto, openapi)  → lives in web-api/api
 dev.compose.yml   local infra (postgres, redis, minio, workers, renderer)
 PLAN.md           full design + execution log
