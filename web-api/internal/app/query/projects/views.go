@@ -7,15 +7,15 @@ import (
 )
 
 type ProjectView struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Defaults    json.RawMessage `json:"defaults"`
-	Archived    bool            `json:"archived"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	RunsCount     int           `json:"runs_count"`
-	UploadedCount int           `json:"uploaded_count"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Description   string          `json:"description"`
+	Defaults      json.RawMessage `json:"defaults"`
+	Archived      bool            `json:"archived"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	RunsCount     int             `json:"runs_count"`
+	UploadedCount int             `json:"uploaded_count"`
 }
 
 type CharacterView struct {
@@ -58,11 +58,11 @@ type PlotView struct {
 
 // ProjectDetailView is the "everything for /projects/:id" payload.
 type ProjectDetailView struct {
-	Project        ProjectView          `json:"project"`
-	Characters     []CharacterView      `json:"characters"`
-	Environments   []EnvironmentView    `json:"environments"`
-	SocialAccounts []SocialAccountView  `json:"social_accounts"`
-	Plot           *PlotView            `json:"plot,omitempty"`
+	Project        ProjectView         `json:"project"`
+	Characters     []CharacterView     `json:"characters"`
+	Environments   []EnvironmentView   `json:"environments"`
+	SocialAccounts []SocialAccountView `json:"social_accounts"`
+	Plot           *PlotView           `json:"plot,omitempty"`
 }
 
 // SocialAccountView is the read DTO for a SocialAccount. ProjectID + IsDefault
@@ -98,8 +98,8 @@ type SocialAccountView struct {
 	HasAPI            bool   `json:"has_api"`
 	OAuthChannelTitle string `json:"oauth_channel_title,omitempty"`
 	// API daily quota (videos.insert ≈ 1600 units, 10k/day ⇒ ~6/day).
-	APIUploadsUsed  int `json:"api_uploads_used"`
-	APIUploadsLimit int `json:"api_uploads_limit"`
-	CreatedAt            time.Time       `json:"created_at"`
-	UpdatedAt            time.Time       `json:"updated_at"`
+	APIUploadsUsed  int       `json:"api_uploads_used"`
+	APIUploadsLimit int       `json:"api_uploads_limit"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }

@@ -9,10 +9,10 @@ import (
 	"github.com/example/dddcqrs/internal/domain/pipeline"
 	"github.com/example/dddcqrs/internal/domain/projects"
 	"github.com/example/dddcqrs/internal/domain/scheduler"
-	"github.com/example/dddcqrs/internal/domain/uploadmetrics"
-	writerepo "github.com/example/dddcqrs/internal/infrastructure/persistence/write"
 	"github.com/example/dddcqrs/internal/domain/shared"
+	"github.com/example/dddcqrs/internal/domain/uploadmetrics"
 	"github.com/example/dddcqrs/internal/domain/user"
+	writerepo "github.com/example/dddcqrs/internal/infrastructure/persistence/write"
 )
 
 // UserWriteRepository is the write-side port for the User aggregate, surfaced

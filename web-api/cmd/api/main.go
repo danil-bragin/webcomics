@@ -14,18 +14,18 @@ import (
 	"github.com/example/dddcqrs/internal/app"
 	"github.com/example/dddcqrs/internal/app/bus"
 	audiocmd "github.com/example/dddcqrs/internal/app/command/audiolib"
+	"github.com/example/dddcqrs/internal/domain/uploadmetrics"
 	"github.com/example/dddcqrs/internal/infrastructure/config"
 	"github.com/example/dddcqrs/internal/infrastructure/llm"
+	"github.com/example/dddcqrs/internal/infrastructure/persistence/uow"
 	miniostore "github.com/example/dddcqrs/internal/infrastructure/storage/minio"
 	httpiface "github.com/example/dddcqrs/internal/interfaces/http"
-	"github.com/example/dddcqrs/internal/infrastructure/persistence/uow"
 	"github.com/example/dddcqrs/internal/platform/balances"
 	"github.com/example/dddcqrs/internal/platform/metrics"
-	"github.com/example/dddcqrs/internal/platform/postgres"
 	"github.com/example/dddcqrs/internal/platform/metricsticker"
+	"github.com/example/dddcqrs/internal/platform/postgres"
 	"github.com/example/dddcqrs/internal/platform/redis"
 	"github.com/example/dddcqrs/internal/platform/scheduler"
-	"github.com/example/dddcqrs/internal/domain/uploadmetrics"
 )
 
 // balancesAdapter satisfies httpiface.BalancesProvider so the http package

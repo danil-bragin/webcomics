@@ -58,13 +58,13 @@ FROM audio_tracks WHERE id = $1 FOR UPDATE`
 
 func (r *AudioRepository) Get(ctx context.Context, id audiolib.TrackID) (*audiolib.Track, error) {
 	var (
-		tid, kind, title, mood, objectKey, bucket   string
-		source, sourceRef, attribution, scope, pid  string
-		createdBy                                   string
-		tags                                        []string
-		durationMs                                  int
-		bytes                                       int64
-		createdAt                                   time.Time
+		tid, kind, title, mood, objectKey, bucket  string
+		source, sourceRef, attribution, scope, pid string
+		createdBy                                  string
+		tags                                       []string
+		durationMs                                 int
+		bytes                                      int64
+		createdAt                                  time.Time
 	)
 	err := r.tx.QueryRow(ctx, selAudioTrack, id.String()).Scan(
 		&tid, &kind, &title, &tags, &mood, &durationMs, &objectKey, &bucket,

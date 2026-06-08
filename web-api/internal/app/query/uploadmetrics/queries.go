@@ -8,12 +8,12 @@ import (
 )
 
 type SnapshotView struct {
-	ID         string    `json:"id"`
-	FetchedAt  time.Time `json:"fetched_at"`
-	Views      int64     `json:"views"`
-	Likes      int64     `json:"likes"`
-	Comments   int64     `json:"comments"`
-	Shares     int64     `json:"shares"`
+	ID        string    `json:"id"`
+	FetchedAt time.Time `json:"fetched_at"`
+	Views     int64     `json:"views"`
+	Likes     int64     `json:"likes"`
+	Comments  int64     `json:"comments"`
+	Shares    int64     `json:"shares"`
 }
 
 type ReadModel interface {

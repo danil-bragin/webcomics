@@ -11,7 +11,7 @@ import (
 
 type SnapshotID string
 
-func NewSnapshotID() SnapshotID    { return SnapshotID(uuid.NewString()) }
+func NewSnapshotID() SnapshotID      { return SnapshotID(uuid.NewString()) }
 func (id SnapshotID) String() string { return string(id) }
 
 // Snapshot captures one point-in-time view of an upload's public metrics.

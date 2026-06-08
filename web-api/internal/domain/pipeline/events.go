@@ -156,19 +156,19 @@ func (AssembleRequested) EventName() string { return "pipeline.assemble.requeste
 // Provider (e.g. "telegram") + Params (e.g. {chat_id, caption}).
 type UploadRequested struct {
 	shared.BaseEvent
-	RunID              string         `json:"run_id"`
-	StepIndex          int            `json:"step_index"`
-	StepID             string         `json:"step_id"`
-	AttemptID          string         `json:"attempt_id"`
-	VideoKey           string         `json:"video_key"`
-	Provider           string         `json:"provider"`
-	Params             map[string]any `json:"params,omitempty"`
+	RunID     string         `json:"run_id"`
+	StepIndex int            `json:"step_index"`
+	StepID    string         `json:"step_id"`
+	AttemptID string         `json:"attempt_id"`
+	VideoKey  string         `json:"video_key"`
+	Provider  string         `json:"provider"`
+	Params    map[string]any `json:"params,omitempty"`
 	// Selenium-provider fields (resolved from SocialAccount).
-	SocialAccountID    string         `json:"social_account_id,omitempty"`
-	FirefoxProfilePath string         `json:"firefox_profile_path,omitempty"`
+	SocialAccountID    string `json:"social_account_id,omitempty"`
+	FirefoxProfilePath string `json:"firefox_profile_path,omitempty"`
 	// Composed by the caption step. Maps platform → {caption, title, hashtags}.
-	Captions  map[string]any `json:"captions,omitempty"`
-	ScheduledAt string       `json:"scheduled_at,omitempty"` // RFC3339, optional
+	Captions    map[string]any `json:"captions,omitempty"`
+	ScheduledAt string         `json:"scheduled_at,omitempty"` // RFC3339, optional
 }
 
 func (UploadRequested) EventName() string { return "pipeline.upload.requested" }
@@ -198,12 +198,12 @@ func (CaptionRequested) EventName() string { return "pipeline.caption.requested"
 
 // CaptionCompletedPayload — Python worker → Go consumer.
 type CaptionCompletedPayload struct {
-	RunID      string         `json:"run_id"`
-	StepIndex  int            `json:"step_index"`
-	Captions   map[string]any `json:"captions"` // platform → {caption, title, hashtags}
+	RunID      string           `json:"run_id"`
+	StepIndex  int              `json:"step_index"`
+	Captions   map[string]any   `json:"captions"` // platform → {caption, title, hashtags}
 	Metadata   *CaptionMetadata `json:"metadata,omitempty"`
-	Cost       CostInfo       `json:"cost"`
-	DurationMs int            `json:"duration_ms"`
+	Cost       CostInfo         `json:"cost"`
+	DurationMs int              `json:"duration_ms"`
 }
 
 // CaptionMetadata is the structured LLM output the upload pipeline consumes.
@@ -228,15 +228,15 @@ type PlatformCaption struct {
 }
 
 type UploadCompletedPayload struct {
-	RunID            string            `json:"run_id"`
-	StepIndex        int               `json:"step_index"`
-	ExternalRef      string            `json:"external_ref"`
-	ExternalID       string            `json:"video_id,omitempty"`
-	SocialAccountID  string            `json:"social_account_id,omitempty"`
-	FinalVisibility  string            `json:"final_visibility,omitempty"`
-	ScreenshotTrail  []ScreenshotEntry `json:"screenshot_trail,omitempty"`
-	Cost             CostInfo          `json:"cost"`
-	DurationMs       int               `json:"duration_ms"`
+	RunID           string            `json:"run_id"`
+	StepIndex       int               `json:"step_index"`
+	ExternalRef     string            `json:"external_ref"`
+	ExternalID      string            `json:"video_id,omitempty"`
+	SocialAccountID string            `json:"social_account_id,omitempty"`
+	FinalVisibility string            `json:"final_visibility,omitempty"`
+	ScreenshotTrail []ScreenshotEntry `json:"screenshot_trail,omitempty"`
+	Cost            CostInfo          `json:"cost"`
+	DurationMs      int               `json:"duration_ms"`
 }
 
 // UploadFailedPayload extends StepFailedPayload with upload-specific diagnostics.

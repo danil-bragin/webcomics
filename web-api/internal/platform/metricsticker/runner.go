@@ -2,11 +2,11 @@
 // a configurable cadence (UPLOAD_METRICS_INTERVAL_HOURS env, default 6h).
 //
 // Per tick:
-//   1. SELECT due rows (last_fetched_at NULL or older than `interval`).
-//   2. For YT — fetch in-process via Data API + RecordMetricsSnapshot.
-//   3. For IG/TT/FB — XADD pipeline.metrics.requested for the Python worker
-//      (which has Firefox); the worker publishes pipeline.metrics.completed
-//      that a Go consumer maps back into RecordMetricsSnapshot.
+//  1. SELECT due rows (last_fetched_at NULL or older than `interval`).
+//  2. For YT — fetch in-process via Data API + RecordMetricsSnapshot.
+//  3. For IG/TT/FB — XADD pipeline.metrics.requested for the Python worker
+//     (which has Firefox); the worker publishes pipeline.metrics.completed
+//     that a Go consumer maps back into RecordMetricsSnapshot.
 package metricsticker
 
 import (

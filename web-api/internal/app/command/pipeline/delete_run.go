@@ -26,8 +26,8 @@ type MinIOPrefixDeleter interface {
 }
 
 type DeleteRunHandler struct {
-	uow      uow.Manager
-	store    MinIOPrefixDeleter
+	uow           uow.Manager
+	store         MinIOPrefixDeleter
 	writePoolExec func(ctx context.Context, sql string, args ...any) error
 }
 

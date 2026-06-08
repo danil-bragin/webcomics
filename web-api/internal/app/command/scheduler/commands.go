@@ -1,11 +1,11 @@
 // Package scheduler holds write-side commands for scheduled uploads.
 //
 // Resolution chain in ScheduleUpload:
-//   1. Load social account → rate-limit config (limit, window, gap).
-//   2. Load existing slots in [target ± window].
-//   3. Pure domain CanSchedule check.
-//   4. On OK insert row; on ErrLimitExceeded / ErrGapViolation return next
-//      free slot suggestion to the caller (no DB write).
+//  1. Load social account → rate-limit config (limit, window, gap).
+//  2. Load existing slots in [target ± window].
+//  3. Pure domain CanSchedule check.
+//  4. On OK insert row; on ErrLimitExceeded / ErrGapViolation return next
+//     free slot suggestion to the caller (no DB write).
 package scheduler
 
 import (
@@ -38,7 +38,9 @@ type ScheduleUploadResult struct {
 
 type ScheduleUploadHandler struct{ uow uow.Manager }
 
-func NewScheduleUploadHandler(m uow.Manager) *ScheduleUploadHandler { return &ScheduleUploadHandler{uow: m} }
+func NewScheduleUploadHandler(m uow.Manager) *ScheduleUploadHandler {
+	return &ScheduleUploadHandler{uow: m}
+}
 
 func (h *ScheduleUploadHandler) Handle(ctx context.Context, cmd ScheduleUpload) (ScheduleUploadResult, error) {
 	var out ScheduleUploadResult

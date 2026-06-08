@@ -21,10 +21,11 @@ import (
 // results" rather than 5xx.
 //
 // kind → URL mapping:
-//   music   → https://pixabay.com/music/search/<q>/
-//   sfx     → https://pixabay.com/sound-effects/search/<q>/
-//   ambient → music with "ambient" mood filter
-//   voice   → sfx with "voice" tag
+//
+//	music   → https://pixabay.com/music/search/<q>/
+//	sfx     → https://pixabay.com/sound-effects/search/<q>/
+//	ambient → music with "ambient" mood filter
+//	voice   → sfx with "voice" tag
 type PixabayScraper struct {
 	client *http.Client
 	apiKey string

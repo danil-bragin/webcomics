@@ -38,23 +38,23 @@ const (
 type Run struct {
 	shared.AggregateRoot
 
-	id               RunID
-	templateID       TemplateID
-	prompt           string
-	configSnapshot   []StepConfig
-	autoAssemble     bool
+	id             RunID
+	templateID     TemplateID
+	prompt         string
+	configSnapshot []StepConfig
+	autoAssemble   bool
 	// requireReviewBeforeUpload pauses the run in awaiting_action when the
 	// next step is `upload`. The user resumes via ResumeFromReview after
 	// reviewing/editing/approving the upload records.
 	requireReviewBeforeUpload bool
-	status           RunStatus
-	currentStepIndex int
-	totalCostUSD     float64
-	maxCostUSD       float64
-	errorMsg         string
-	createdAt        time.Time
-	startedAt        *time.Time
-	finishedAt       *time.Time
+	status                    RunStatus
+	currentStepIndex          int
+	totalCostUSD              float64
+	maxCostUSD                float64
+	errorMsg                  string
+	createdAt                 time.Time
+	startedAt                 *time.Time
+	finishedAt                *time.Time
 
 	// Project linkage (optional).
 	projectID      string
@@ -78,8 +78,8 @@ type Run struct {
 	newCosts  []CostEntry
 }
 
-func (r *Run) ProjectID() string             { return r.projectID }
-func (r *Run) Language() string               { return normalizeLanguage(r.language) }
+func (r *Run) ProjectID() string { return r.projectID }
+func (r *Run) Language() string  { return normalizeLanguage(r.language) }
 
 func normalizeLanguage(lang string) string {
 	switch lang {
@@ -145,23 +145,23 @@ func NewRunWithOptions(prompt string, template *Template, opts RunOptions) (*Run
 
 	now := time.Now().UTC()
 	r := &Run{
-		id:               NewRunID(),
-		templateID:       template.ID(),
-		prompt:           prompt,
-		configSnapshot:   cfg,
-		autoAssemble:     opts.AutoAssemble,
+		id:                        NewRunID(),
+		templateID:                template.ID(),
+		prompt:                    prompt,
+		configSnapshot:            cfg,
+		autoAssemble:              opts.AutoAssemble,
 		requireReviewBeforeUpload: opts.RequireReviewBeforeUpload,
-		status:           RunStatusQueued,
-		currentStepIndex: 0,
-		maxCostUSD:       template.MaxCostUSD(),
-		createdAt:        now,
-		projectID:        opts.ProjectID,
-		characterIDs:     opts.CharacterIDs,
-		environmentIDs:   opts.EnvironmentIDs,
-		plotID:           opts.PlotID,
-		linked:           opts.LinkedContext,
-		language:         normalizeLanguage(opts.Language),
-		pauseAfterStep:   -1,
+		status:                    RunStatusQueued,
+		currentStepIndex:          0,
+		maxCostUSD:                template.MaxCostUSD(),
+		createdAt:                 now,
+		projectID:                 opts.ProjectID,
+		characterIDs:              opts.CharacterIDs,
+		environmentIDs:            opts.EnvironmentIDs,
+		plotID:                    opts.PlotID,
+		linked:                    opts.LinkedContext,
+		language:                  normalizeLanguage(opts.Language),
+		pauseAfterStep:            -1,
 	}
 	for idx, c := range cfg {
 		r.steps = append(r.steps, newStep(idx, c))

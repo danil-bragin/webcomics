@@ -22,7 +22,7 @@ var (
 
 type ID string
 
-func NewID() ID         { return ID(uuid.NewString()) }
+func NewID() ID              { return ID(uuid.NewString()) }
 func (id ID) String() string { return string(id) }
 
 type Status string
@@ -116,18 +116,18 @@ func Reconstitute(id ID, runID, accountID string, scheduledAt time.Time, status 
 }
 
 // Getters.
-func (s *ScheduledUpload) ID() ID                    { return s.id }
-func (s *ScheduledUpload) RunID() string             { return s.runID }
-func (s *ScheduledUpload) SocialAccountID() string   { return s.socialAccountID }
-func (s *ScheduledUpload) ScheduledAt() time.Time    { return s.scheduledAt }
-func (s *ScheduledUpload) Status() Status            { return s.status }
-func (s *ScheduledUpload) ExternalRef() string       { return s.externalRef }
-func (s *ScheduledUpload) Error() string             { return s.error }
-func (s *ScheduledUpload) Metadata() map[string]any  { return s.metadata }
-func (s *ScheduledUpload) CreatedAt() time.Time      { return s.createdAt }
-func (s *ScheduledUpload) UpdatedAt() time.Time      { return s.updatedAt }
-func (s *ScheduledUpload) FiredAt() *time.Time       { return s.firedAt }
-func (s *ScheduledUpload) CompletedAt() *time.Time   { return s.completedAt }
+func (s *ScheduledUpload) ID() ID                   { return s.id }
+func (s *ScheduledUpload) RunID() string            { return s.runID }
+func (s *ScheduledUpload) SocialAccountID() string  { return s.socialAccountID }
+func (s *ScheduledUpload) ScheduledAt() time.Time   { return s.scheduledAt }
+func (s *ScheduledUpload) Status() Status           { return s.status }
+func (s *ScheduledUpload) ExternalRef() string      { return s.externalRef }
+func (s *ScheduledUpload) Error() string            { return s.error }
+func (s *ScheduledUpload) Metadata() map[string]any { return s.metadata }
+func (s *ScheduledUpload) CreatedAt() time.Time     { return s.createdAt }
+func (s *ScheduledUpload) UpdatedAt() time.Time     { return s.updatedAt }
+func (s *ScheduledUpload) FiredAt() *time.Time      { return s.firedAt }
+func (s *ScheduledUpload) CompletedAt() *time.Time  { return s.completedAt }
 
 // State transitions.
 

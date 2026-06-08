@@ -113,5 +113,5 @@ func (r *repositories) Projects() ProjectsWriteRepository          { return r.pr
 func (r *repositories) AudioLib() AudioLibWriteRepository          { return r.audioLib }
 func (r *repositories) Formats() FormatsWriteRepository            { return r.formats }
 func (r *repositories) Scheduler() SchedulerWriteRepository        { return r.scheduler }
-func (r *repositories) Metrics() MetricsWriteRepository             { return r.metrics }
+func (r *repositories) Metrics() MetricsWriteRepository            { return r.metrics }
 func (r *repositories) Outbox() OutboxRepository                   { return r.outbox }

@@ -267,11 +267,11 @@ type RecordCaptionCompleted struct {
 	DurationMs int
 }
 
-func (RecordCaptionCompleted) IsCommand()              {}
-func (c RecordCaptionCompleted) GetRunID() string      { return c.RunID }
-func (c RecordCaptionCompleted) GetStepType() string   { return "caption" }
-func (c RecordCaptionCompleted) GetProvider() string   { return c.Cost.Provider }
-func (c RecordCaptionCompleted) GetCostUSD() float64   { return c.Cost.TotalCostUSD }
+func (RecordCaptionCompleted) IsCommand()            {}
+func (c RecordCaptionCompleted) GetRunID() string    { return c.RunID }
+func (c RecordCaptionCompleted) GetStepType() string { return "caption" }
+func (c RecordCaptionCompleted) GetProvider() string { return c.Cost.Provider }
+func (c RecordCaptionCompleted) GetCostUSD() float64 { return c.Cost.TotalCostUSD }
 
 type RecordCaptionCompletedHandler struct{ uow uow.Manager }
 

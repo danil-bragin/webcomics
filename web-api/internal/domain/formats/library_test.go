@@ -111,7 +111,7 @@ func TestSystem_ResolutionAspectsSane(t *testing.T) {
 
 func TestSystem_TransitionAndFPSSane(t *testing.T) {
 	validTransitions := map[string]bool{
-		"":         true, // not set → renderer default
+		"":          true, // not set → renderer default
 		"crossfade": true,
 		"fade":      true,
 		"slide":     true,

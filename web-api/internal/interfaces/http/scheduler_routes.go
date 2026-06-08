@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/example/dddcqrs/internal/app/bus"
-	schcmd "github.com/example/dddcqrs/internal/app/command/scheduler"
 	projcmd "github.com/example/dddcqrs/internal/app/command/projects"
+	schcmd "github.com/example/dddcqrs/internal/app/command/scheduler"
 	schq "github.com/example/dddcqrs/internal/app/query/scheduler"
 )
 

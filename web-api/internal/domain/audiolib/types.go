@@ -14,13 +14,13 @@ import (
 )
 
 var (
-	ErrTrackTitleEmpty = errors.New("audiolib: title empty")
-	ErrTrackKindInvalid = errors.New("audiolib: kind must be one of music|sfx|ambient|voice")
-	ErrTrackScopeInvalid = errors.New("audiolib: scope must be global or project")
-	ErrTrackSourceInvalid = errors.New("audiolib: source must be manual|url|pixabay")
+	ErrTrackTitleEmpty       = errors.New("audiolib: title empty")
+	ErrTrackKindInvalid      = errors.New("audiolib: kind must be one of music|sfx|ambient|voice")
+	ErrTrackScopeInvalid     = errors.New("audiolib: scope must be global or project")
+	ErrTrackSourceInvalid    = errors.New("audiolib: source must be manual|url|pixabay")
 	ErrTrackProjectIDMissing = errors.New("audiolib: project_id required when scope=project")
-	ErrTrackObjectKeyEmpty = errors.New("audiolib: object_key empty")
-	ErrTrackNotFound = errors.New("audiolib: track not found")
+	ErrTrackObjectKeyEmpty   = errors.New("audiolib: object_key empty")
+	ErrTrackNotFound         = errors.New("audiolib: track not found")
 )
 
 type Kind string
@@ -67,7 +67,7 @@ func (s Source) Valid() bool {
 
 type TrackID string
 
-func NewTrackID() TrackID       { return TrackID(uuid.NewString()) }
+func NewTrackID() TrackID         { return TrackID(uuid.NewString()) }
 func (id TrackID) String() string { return string(id) }
 
 type Track struct {
@@ -151,22 +151,22 @@ func NewTrack(p NewTrackParams) (*Track, error) {
 	}, nil
 }
 
-func (t *Track) ID() TrackID         { return t.id }
-func (t *Track) Kind() Kind          { return t.kind }
-func (t *Track) Title() string       { return t.title }
-func (t *Track) Tags() []string      { return append([]string{}, t.tags...) }
-func (t *Track) Mood() string        { return t.mood }
-func (t *Track) DurationMs() int     { return t.durationMs }
-func (t *Track) ObjectKey() string   { return t.objectKey }
-func (t *Track) Bucket() string      { return t.bucket }
-func (t *Track) Source() Source      { return t.source }
-func (t *Track) SourceRef() string   { return t.sourceRef }
-func (t *Track) Attribution() string { return t.attribution }
-func (t *Track) Scope() Scope        { return t.scope }
-func (t *Track) ProjectID() string   { return t.projectID }
-func (t *Track) Bytes() int64        { return t.bytes }
+func (t *Track) ID() TrackID          { return t.id }
+func (t *Track) Kind() Kind           { return t.kind }
+func (t *Track) Title() string        { return t.title }
+func (t *Track) Tags() []string       { return append([]string{}, t.tags...) }
+func (t *Track) Mood() string         { return t.mood }
+func (t *Track) DurationMs() int      { return t.durationMs }
+func (t *Track) ObjectKey() string    { return t.objectKey }
+func (t *Track) Bucket() string       { return t.bucket }
+func (t *Track) Source() Source       { return t.source }
+func (t *Track) SourceRef() string    { return t.sourceRef }
+func (t *Track) Attribution() string  { return t.attribution }
+func (t *Track) Scope() Scope         { return t.scope }
+func (t *Track) ProjectID() string    { return t.projectID }
+func (t *Track) Bytes() int64         { return t.bytes }
 func (t *Track) CreatedAt() time.Time { return t.createdAt }
-func (t *Track) CreatedBy() string   { return t.createdBy }
+func (t *Track) CreatedBy() string    { return t.createdBy }
 
 func (t *Track) Retag(tags []string, mood string) {
 	t.tags = append([]string{}, tags...)

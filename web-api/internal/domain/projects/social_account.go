@@ -92,11 +92,11 @@ func NewSocialAccount(platform, label, firefoxProfilePath string, extra map[stri
 	}, nil
 }
 
-func (s *SocialAccount) ID() SocialAccountID          { return s.id }
-func (s *SocialAccount) Platform() string             { return s.platform }
-func (s *SocialAccount) Label() string                { return s.label }
-func (s *SocialAccount) FirefoxProfilePath() string   { return s.firefoxProfilePath }
-func (s *SocialAccount) Extra() map[string]any        { return s.extra }
+func (s *SocialAccount) ID() SocialAccountID        { return s.id }
+func (s *SocialAccount) Platform() string           { return s.platform }
+func (s *SocialAccount) Label() string              { return s.label }
+func (s *SocialAccount) FirefoxProfilePath() string { return s.firefoxProfilePath }
+func (s *SocialAccount) Extra() map[string]any      { return s.extra }
 
 // OAuthRefreshToken returns the stored YouTube API refresh token (in extra), or
 // "" when the account hasn't been connected for API upload.

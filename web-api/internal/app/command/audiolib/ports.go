@@ -22,14 +22,14 @@ type PixabaySearcher interface {
 }
 
 type PixabayResult struct {
-	ID            string   `json:"id"`
-	Title         string   `json:"title"`
-	Tags          []string `json:"tags"`
-	DurationMs    int      `json:"duration_ms"`
-	PreviewURL    string   `json:"preview_url"`
-	DownloadURL   string   `json:"download_url"`
-	PageURL       string   `json:"page_url"`
-	Author        string   `json:"author"`
-	Attribution   string   `json:"attribution"`
-	MimeType      string   `json:"mime_type"`
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Tags        []string `json:"tags"`
+	DurationMs  int      `json:"duration_ms"`
+	PreviewURL  string   `json:"preview_url"`
+	DownloadURL string   `json:"download_url"`
+	PageURL     string   `json:"page_url"`
+	Author      string   `json:"author"`
+	Attribution string   `json:"attribution"`
+	MimeType    string   `json:"mime_type"`
 }

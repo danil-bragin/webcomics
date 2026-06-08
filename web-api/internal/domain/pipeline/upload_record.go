@@ -15,22 +15,22 @@ var (
 // UploadRecordID is the public identifier of one upload attempt.
 type UploadRecordID string
 
-func NewUploadRecordID() UploadRecordID { return UploadRecordID(uuid.NewString()) }
+func NewUploadRecordID() UploadRecordID  { return UploadRecordID(uuid.NewString()) }
 func (id UploadRecordID) String() string { return string(id) }
 
 // UploadRecordStatus codifies the lifecycle of an upload.
 type UploadRecordStatus string
 
 const (
-	UploadStatusPending        UploadRecordStatus = "pending"
-	UploadStatusMetadataReady  UploadRecordStatus = "metadata_ready"
-	UploadStatusPendingReview  UploadRecordStatus = "pending_review"
-	UploadStatusApproved       UploadRecordStatus = "approved"
-	UploadStatusRejected       UploadRecordStatus = "rejected"
-	UploadStatusUploading      UploadRecordStatus = "uploading"
-	UploadStatusUploaded       UploadRecordStatus = "uploaded"
-	UploadStatusPublished      UploadRecordStatus = "published"
-	UploadStatusFailed         UploadRecordStatus = "failed"
+	UploadStatusPending       UploadRecordStatus = "pending"
+	UploadStatusMetadataReady UploadRecordStatus = "metadata_ready"
+	UploadStatusPendingReview UploadRecordStatus = "pending_review"
+	UploadStatusApproved      UploadRecordStatus = "approved"
+	UploadStatusRejected      UploadRecordStatus = "rejected"
+	UploadStatusUploading     UploadRecordStatus = "uploading"
+	UploadStatusUploaded      UploadRecordStatus = "uploaded"
+	UploadStatusPublished     UploadRecordStatus = "published"
+	UploadStatusFailed        UploadRecordStatus = "failed"
 )
 
 // UploadMetadata is the resolved snapshot of what we actually pushed to YT.
@@ -61,9 +61,10 @@ type ScreenshotEntry struct {
 
 // UploadRecord aggregates one upload attempt. Mutates through behavior methods
 // so the lifecycle is explicit and reviewable in UI:
-//   pending → metadata_ready → pending_review → approved → uploading → uploaded → published
-//                                       ↓                      ↓
-//                                    rejected               failed
+//
+//	pending → metadata_ready → pending_review → approved → uploading → uploaded → published
+//	                                    ↓                      ↓
+//	                                 rejected               failed
 type UploadRecord struct {
 	id                     UploadRecordID
 	runID                  string
@@ -298,27 +299,27 @@ func (r *UploadRecord) SetPlatformTarget(p string) {
 }
 
 // Getters for the new fields.
-func (r *UploadRecord) MetadataOverridden() bool { return r.metadataOverridden }
+func (r *UploadRecord) MetadataOverridden() bool    { return r.metadataOverridden }
 func (r *UploadRecord) AudienceConfidence() float64 { return r.audienceConfidence }
-func (r *UploadRecord) AudienceReasoning() string { return r.audienceReasoning }
-func (r *UploadRecord) Hook() string { return r.hook }
-func (r *UploadRecord) PlatformTarget() string { return r.platformTarget }
+func (r *UploadRecord) AudienceReasoning() string   { return r.audienceReasoning }
+func (r *UploadRecord) Hook() string                { return r.hook }
+func (r *UploadRecord) PlatformTarget() string      { return r.platformTarget }
 
 // Getters.
-func (r *UploadRecord) ID() UploadRecordID                  { return r.id }
-func (r *UploadRecord) RunID() string                       { return r.runID }
-func (r *UploadRecord) ProjectID() string                   { return r.projectID }
-func (r *UploadRecord) SocialAccountID() string             { return r.socialAccountID }
-func (r *UploadRecord) StepIndex() int                      { return r.stepIndex }
-func (r *UploadRecord) Status() UploadRecordStatus          { return r.status }
-func (r *UploadRecord) Provider() string                    { return r.provider }
-func (r *UploadRecord) Metadata() UploadMetadata            { return r.metadata }
-func (r *UploadRecord) ExternalRef() string                 { return r.externalRef }
-func (r *UploadRecord) ExternalID() string                  { return r.externalID }
-func (r *UploadRecord) Attempts() int                       { return r.attempts }
-func (r *UploadRecord) ErrorMessage() string                { return r.errorMessage }
-func (r *UploadRecord) ErrorScreenshotAssetID() string      { return r.errorScreenshotAssetID }
-func (r *UploadRecord) ScreenshotTrail() []ScreenshotEntry  { return r.screenshotTrail }
+func (r *UploadRecord) ID() UploadRecordID                 { return r.id }
+func (r *UploadRecord) RunID() string                      { return r.runID }
+func (r *UploadRecord) ProjectID() string                  { return r.projectID }
+func (r *UploadRecord) SocialAccountID() string            { return r.socialAccountID }
+func (r *UploadRecord) StepIndex() int                     { return r.stepIndex }
+func (r *UploadRecord) Status() UploadRecordStatus         { return r.status }
+func (r *UploadRecord) Provider() string                   { return r.provider }
+func (r *UploadRecord) Metadata() UploadMetadata           { return r.metadata }
+func (r *UploadRecord) ExternalRef() string                { return r.externalRef }
+func (r *UploadRecord) ExternalID() string                 { return r.externalID }
+func (r *UploadRecord) Attempts() int                      { return r.attempts }
+func (r *UploadRecord) ErrorMessage() string               { return r.errorMessage }
+func (r *UploadRecord) ErrorScreenshotAssetID() string     { return r.errorScreenshotAssetID }
+func (r *UploadRecord) ScreenshotTrail() []ScreenshotEntry { return r.screenshotTrail }
 
 // SetScreenshotTrail replaces the per-stage screenshot trail. Called by the
 // MarkUploaded / MarkFailed commands when the worker payload includes the
@@ -327,10 +328,10 @@ func (r *UploadRecord) SetScreenshotTrail(trail []ScreenshotEntry) {
 	r.screenshotTrail = trail
 	r.updatedAt = time.Now().UTC()
 }
-func (r *UploadRecord) StartedAt() *time.Time               { return r.startedAt }
-func (r *UploadRecord) FinishedAt() *time.Time              { return r.finishedAt }
-func (r *UploadRecord) CreatedAt() time.Time                { return r.createdAt }
-func (r *UploadRecord) UpdatedAt() time.Time                { return r.updatedAt }
+func (r *UploadRecord) StartedAt() *time.Time  { return r.startedAt }
+func (r *UploadRecord) FinishedAt() *time.Time { return r.finishedAt }
+func (r *UploadRecord) CreatedAt() time.Time   { return r.createdAt }
+func (r *UploadRecord) UpdatedAt() time.Time   { return r.updatedAt }
 
 // ReconstituteUploadRecord rebuilds the aggregate from storage without emitting
 // events. Used by the write repo's loader.

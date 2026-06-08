@@ -16,8 +16,6 @@ import (
 	projcmd "github.com/example/dddcqrs/internal/app/command/projects"
 )
 
-var _ = context.Background
-
 // googleOAuth holds the single OAuth app credentials used to connect channels
 // for API upload. Per-channel refresh tokens live on each account.
 type googleOAuth struct {
@@ -42,8 +40,9 @@ const (
 )
 
 // MountYouTubeOAuth registers the connect-via-API consent flow:
-//   GET /api/youtube-oauth/start?account_id=<id>  → 302 to Google consent
-//   GET /api/youtube-oauth/callback?code&state    → exchange + persist token
+//
+//	GET /api/youtube-oauth/start?account_id=<id>  → 302 to Google consent
+//	GET /api/youtube-oauth/callback?code&state    → exchange + persist token
 func (s *Server) MountYouTubeOAuth(r chi.Router) {
 	r.Get("/api/youtube-oauth/start", func(w http.ResponseWriter, req *http.Request) {
 		if s.googleOAuth == nil {
@@ -167,6 +166,3 @@ func oauthResultPage(w http.ResponseWriter, ok bool, msg string) {
 		`<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;background:#0b0b0f;color:#eee;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><div style="font-size:48px">%s</div><p style="max-width:420px">%s</p></div></body>`,
 		icon, msg))
 }
-
-// keep context import used even if compiler trims (exchangeCode uses it).
-var _ = context.Background

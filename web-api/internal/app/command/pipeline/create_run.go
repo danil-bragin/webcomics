@@ -302,12 +302,12 @@ type MusicOverride struct {
 
 // AssembleOverride applied to the assemble step's params.
 type AssembleOverride struct {
-	FPS              int
-	Width            int
-	Height           int
-	Codec            string
-	PanelDurationMs  int    `json:"panel_duration_ms"`
-	Transition       string `json:"transition"`
+	FPS             int
+	Width           int
+	Height          int
+	Codec           string
+	PanelDurationMs int    `json:"panel_duration_ms"`
+	Transition      string `json:"transition"`
 	// AmbientObjectKey is the MinIO key of a looped ambient bed mixed under
 	// music + voice during render. Empty = no ambient track.
 	AmbientObjectKey string `json:"ambient_object_key"`
@@ -499,16 +499,16 @@ func (h *CreateRunHandler) Handle(ctx context.Context, cmd CreateRun) (CreateRun
 		_ = projectDefaults // kept for review_mode resolution below
 		if resolvedUploadAcct != nil {
 			meta := pipeline.UploadMetadata{
-				Visibility:      stringFromMap(resolvedUploadMeta, "visibility", "unlisted"),
-				MadeForKids:     boolFromMap(resolvedUploadMeta, "made_for_kids", false),
-				AgeRestriction:  stringFromMap(resolvedUploadMeta, "age_restriction", "none"),
-				CategoryID:      stringFromMap(resolvedUploadMeta, "category_id", "22"),
-				CategoryLabel:   stringFromMap(resolvedUploadMeta, "category_label", "People & Blogs"),
-				CommentsEnabled: boolFromMap(resolvedUploadMeta, "comments_enabled", true),
-				Tags:            stringSliceFromMap(resolvedUploadMeta, "tags"),
-				PlaylistNames:   stringSliceFromMap(resolvedUploadMeta, "playlist_names"),
-				Title:           stringFromMap(resolvedUploadMeta, "title", ""),
-				Description:     stringFromMap(resolvedUploadMeta, "description", ""),
+				Visibility:       stringFromMap(resolvedUploadMeta, "visibility", "unlisted"),
+				MadeForKids:      boolFromMap(resolvedUploadMeta, "made_for_kids", false),
+				AgeRestriction:   stringFromMap(resolvedUploadMeta, "age_restriction", "none"),
+				CategoryID:       stringFromMap(resolvedUploadMeta, "category_id", "22"),
+				CategoryLabel:    stringFromMap(resolvedUploadMeta, "category_label", "People & Blogs"),
+				CommentsEnabled:  boolFromMap(resolvedUploadMeta, "comments_enabled", true),
+				Tags:             stringSliceFromMap(resolvedUploadMeta, "tags"),
+				PlaylistNames:    stringSliceFromMap(resolvedUploadMeta, "playlist_names"),
+				Title:            stringFromMap(resolvedUploadMeta, "title", ""),
+				Description:      stringFromMap(resolvedUploadMeta, "description", ""),
 				ThumbnailAssetID: stringFromMap(resolvedUploadMeta, "thumbnail_asset_id", ""),
 			}
 			rec := pipeline.NewUploadRecord(
@@ -763,8 +763,8 @@ func setCaptionAndUploadSteps(steps []pipeline.StepConfig, up *UploadOverride) [
 		return steps
 	}
 	captionStep := pipeline.StepConfig{
-		Type:  pipeline.StepCaption,
-		Model: up.CaptionModel,
+		Type:   pipeline.StepCaption,
+		Model:  up.CaptionModel,
 		Params: map[string]any{},
 	}
 	if len(up.Platforms) > 0 {

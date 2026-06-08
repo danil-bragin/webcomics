@@ -64,18 +64,18 @@ func (h *UploadTrackHandler) Handle(ctx context.Context, cmd UploadTrack) (Uploa
 	}
 	err := h.uow.WithinTx(ctx, func(ctx context.Context, u uow.UnitOfWork) error {
 		t, err := audiolib.NewTrack(audiolib.NewTrackParams{
-			Kind:        kind,
-			Title:       cmd.Title,
-			Tags:        cmd.Tags,
-			Mood:        cmd.Mood,
-			DurationMs:  cmd.DurationMs,
-			ObjectKey:   objectKey,
-			Bucket:      h.storage.Bucket(),
-			Source:      audiolib.SourceManual,
-			Scope:       scope,
-			ProjectID:   cmd.ProjectID,
-			Bytes:       int64(len(cmd.Data)),
-			CreatedBy:   cmd.CreatedBy,
+			Kind:       kind,
+			Title:      cmd.Title,
+			Tags:       cmd.Tags,
+			Mood:       cmd.Mood,
+			DurationMs: cmd.DurationMs,
+			ObjectKey:  objectKey,
+			Bucket:     h.storage.Bucket(),
+			Source:     audiolib.SourceManual,
+			Scope:      scope,
+			ProjectID:  cmd.ProjectID,
+			Bytes:      int64(len(cmd.Data)),
+			CreatedBy:  cmd.CreatedBy,
 		})
 		if err != nil {
 			return err

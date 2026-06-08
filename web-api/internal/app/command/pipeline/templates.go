@@ -61,18 +61,18 @@ func (h *CreateTemplateHandler) Handle(ctx context.Context, cmd CreateTemplate) 
 }
 
 type UpdateTemplate struct {
-	TemplateID       string
-	Name             string
-	Description      *string
-	Category         string
-	Icon             *string
-	Steps            []pipeline.StepConfig
-	SamplePrompts    *[]string
-	FormatID         *string
-	Defaults         map[string]any
-	UpdateDefaults   bool
-	MaxCostUSD       float64
-	UpdateMaxCost    bool
+	TemplateID     string
+	Name           string
+	Description    *string
+	Category       string
+	Icon           *string
+	Steps          []pipeline.StepConfig
+	SamplePrompts  *[]string
+	FormatID       *string
+	Defaults       map[string]any
+	UpdateDefaults bool
+	MaxCostUSD     float64
+	UpdateMaxCost  bool
 }
 
 func (UpdateTemplate) IsCommand() {}

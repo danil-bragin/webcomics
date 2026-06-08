@@ -149,4 +149,3 @@ func (m *SchedulerModel) WindowStatsForAccount(ctx context.Context, accountID st
 	}
 	return s, nil
 }
-

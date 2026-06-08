@@ -70,19 +70,19 @@ func (c StepConfig) PanelCount() int {
 // formatID / defaults) drive the Presets marketplace UI so users can pick a
 // starting point without reading raw step JSON.
 type Template struct {
-	id             TemplateID
-	name           string
-	description    string
-	category       string // meme | shorts | story | demo | custom
-	icon           string // single emoji
-	samplePrompts  []string
-	formatID       string
-	defaults       map[string]any
-	steps          []StepConfig
-	maxCostUSD     float64
-	isTest         bool
-	createdAt      time.Time
-	updatedAt      time.Time
+	id            TemplateID
+	name          string
+	description   string
+	category      string // meme | shorts | story | demo | custom
+	icon          string // single emoji
+	samplePrompts []string
+	formatID      string
+	defaults      map[string]any
+	steps         []StepConfig
+	maxCostUSD    float64
+	isTest        bool
+	createdAt     time.Time
+	updatedAt     time.Time
 }
 
 // NewTemplate creates a template. maxCostUSD = 0 disables the cap.
@@ -141,9 +141,9 @@ func (t *Template) UpdateSteps(steps []StepConfig) error {
 	return nil
 }
 
-func (t *Template) ID() TemplateID       { return t.id }
-func (t *Template) Name() string         { return t.name }
-func (t *Template) Description() string  { return t.description }
+func (t *Template) ID() TemplateID      { return t.id }
+func (t *Template) Name() string        { return t.name }
+func (t *Template) Description() string { return t.description }
 func (t *Template) Category() string {
 	if t.category == "" {
 		return "custom"

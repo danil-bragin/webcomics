@@ -7,10 +7,10 @@ import (
 
 // resolveUploadMeta builds the flat metadata map that goes into the upload
 // step's Params. Precedence (high → low):
-//   1. RunOverrides.Upload.* (run-level, explicit user input)
-//   2. projectDefaults["upload"].* (project settings)
-//   3. SocialAccount per-account defaults
-//   4. Pipeline-wide defaults (hardcoded)
+//  1. RunOverrides.Upload.* (run-level, explicit user input)
+//  2. projectDefaults["upload"].* (project settings)
+//  3. SocialAccount per-account defaults
+//  4. Pipeline-wide defaults (hardcoded)
 //
 // Caption-LLM output is NOT consulted here — it lives in the caption step's
 // payload and is merged on the worker side at upload time.
@@ -168,9 +168,10 @@ func applySubtitlesDefaults(steps []pipeline.StepConfig, projectDefaults map[str
 // width/height (Run override wins).
 //
 // Mapping:
-//   shorts | reels | tiktok  → 1080 × 1920 (9:16)
-//   long                     → 1920 × 1080 (16:9)
-//   square                   → 1080 × 1080 (1:1)
+//
+//	shorts | reels | tiktok  → 1080 × 1920 (9:16)
+//	long                     → 1920 × 1080 (16:9)
+//	square                   → 1080 × 1080 (1:1)
 func applyPrimaryFormat(steps []pipeline.StepConfig, projectDefaults map[string]any) {
 	if projectDefaults == nil {
 		return

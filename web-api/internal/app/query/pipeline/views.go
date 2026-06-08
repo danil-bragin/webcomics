@@ -115,15 +115,15 @@ type CostEntryView struct {
 }
 
 type RunSummary struct {
-	ID           string     `json:"id"`
-	TemplateID   string     `json:"template_id"`
-	Prompt       string     `json:"prompt"`
-	Status       string     `json:"status"`
-	TotalCostUSD float64    `json:"total_cost_usd"`
-	CreatedAt    time.Time  `json:"created_at"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
-	VideoAssetID      string `json:"video_asset_id,omitempty"`
-	FirstImageAssetID string `json:"first_image_asset_id,omitempty"`
+	ID                string     `json:"id"`
+	TemplateID        string     `json:"template_id"`
+	Prompt            string     `json:"prompt"`
+	Status            string     `json:"status"`
+	TotalCostUSD      float64    `json:"total_cost_usd"`
+	CreatedAt         time.Time  `json:"created_at"`
+	FinishedAt        *time.Time `json:"finished_at,omitempty"`
+	VideoAssetID      string     `json:"video_asset_id,omitempty"`
+	FirstImageAssetID string     `json:"first_image_asset_id,omitempty"`
 }
 
 type TemplateView struct {

@@ -335,13 +335,13 @@ const selSocialAccountCols = `id, platform, label, firefox_profile_path, COALESC
 
 func scanSocialAccount(scan func(...any) error) (*projects.SocialAccount, error) {
 	var (
-		sid, platform, label, profilePath      string
-		extraRaw                               []byte
-		statusStr, defVis, defCatID, defCatLab string
-		defKids, verified                      bool
+		sid, platform, label, profilePath          string
+		extraRaw                                   []byte
+		statusStr, defVis, defCatID, defCatLab     string
+		defKids, verified                          bool
 		failureStreak, dailyLimit, windowH, minGap int
-		lastUsed, cooldown                     *time.Time
-		created, updated                       time.Time
+		lastUsed, cooldown                         *time.Time
+		created, updated                           time.Time
 	)
 	if err := scan(&sid, &platform, &label, &profilePath, &extraRaw,
 		&statusStr, &lastUsed, &cooldown, &failureStreak,
@@ -505,14 +505,14 @@ func (r *ProjectsRepository) ListLinkedSocialAccounts(ctx context.Context, proje
 	out := []projects.LinkedSocialAccount{}
 	for rows.Next() {
 		var (
-			sid, platform, label, profilePath      string
-			extraRaw                               []byte
-			statusStr, defVis, defCatID, defCatLab string
-			defKids, verified                      bool
+			sid, platform, label, profilePath          string
+			extraRaw                                   []byte
+			statusStr, defVis, defCatID, defCatLab     string
+			defKids, verified                          bool
 			failureStreak, dailyLimit, windowH, minGap int
-			lastUsed, cooldown                     *time.Time
-			created, updated                       time.Time
-			isDef                                  bool
+			lastUsed, cooldown                         *time.Time
+			created, updated                           time.Time
+			isDef                                      bool
 		)
 		if err := rows.Scan(&sid, &platform, &label, &profilePath, &extraRaw,
 			&statusStr, &lastUsed, &cooldown, &failureStreak,
@@ -535,4 +535,3 @@ func (r *ProjectsRepository) ListLinkedSocialAccounts(ctx context.Context, proje
 	}
 	return out, rows.Err()
 }
-
