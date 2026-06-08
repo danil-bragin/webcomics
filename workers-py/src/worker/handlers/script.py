@@ -96,6 +96,28 @@ def _compose_system_prompt(
     return prefix + "\n\nWrite a panel-by-panel script in JSON {panels:[{prompt,caption}]} consistent with the above."
 
 
+def _apply_quiz_format(base: str | None) -> str | None:
+    """Append guidance turning the script into alternating QUESTION/ANSWER
+    panels for the quiz format. Even-index panels pose a question (no answer),
+    odd-index panels reveal it — so the assemble step can hold questions long
+    (think gap + tick) and reveal answers right after."""
+    guide = (
+        "QUIZ FORMAT: Produce panels as alternating QUESTION/ANSWER pairs. "
+        "Even-index panels (0, 2, 4, ...) are QUESTIONS — the `caption` asks ONE "
+        "punchy, guessable question and must NOT contain or hint the answer. "
+        "Odd-index panels (1, 3, 5, ...) are ANSWERS — the `caption` reveals the "
+        "answer with a short satisfying one-liner. The question panel's image "
+        "`prompt` is an intriguing visual hint; the matching answer panel's image "
+        "`prompt` is the reveal. Escalate difficulty across pairs. The total "
+        "number of panels must be EVEN. End the final answer caption with a "
+        "call to comment their score. "
+        "Output valid JSON {panels:[{prompt,caption}]}."
+    )
+    if base:
+        return base + "\n\n---\n\n" + guide
+    return guide
+
+
 _LANG_NAMES = {"en": "English", "ru": "Russian", "fr": "French"}
 
 
@@ -150,6 +172,8 @@ class ScriptHandler:
         environments = msg.get("environments") or []
         plot = msg.get("plot") or None
         system_prompt = _compose_system_prompt(system_prompt, characters, environments, plot)
+        if params.get("quiz_mode"):
+            system_prompt = _apply_quiz_format(system_prompt)
         system_prompt = _apply_language(system_prompt, language)
 
         ctx = log.bind(run_id=run_id, step_index=step_index, step_type="script", language=language)

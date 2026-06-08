@@ -305,9 +305,32 @@ const PanelClip: React.FC<{ panel: Panel; durationFrames: number; fps: number }>
   );
 };
 
+// Background-music bed level. Kept low so the voiceover (volume 1.0) always
+// sits clearly on top — this is a constant "duck" since our videos are narrated
+// end to end. Music fades in at the start and out at the end so it never just
+// cuts on/off.
+const MUSIC_BED = 0.14;
+
 export const Comic: React.FC<ComicProps> = ({ panels, fps, audioSrc, musicSrc, ambientSrc, sfxByPanel }) => {
   let cursor = 0;
   const sfxSequences: React.ReactNode[] = [];
+  const totalFrames = panels.reduce(
+    (sum, p) => sum + Math.max(1, Math.round((p.durationMs / 1000) * fps)),
+    0,
+  );
+  const fadeIn = Math.max(1, Math.round(fps * 0.5));
+  const fadeOut = Math.max(1, Math.round(fps * 1.0));
+  const musicVolume = (f: number) => {
+    const up = interpolate(f, [0, fadeIn], [0, MUSIC_BED], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    });
+    const down = interpolate(f, [totalFrames - fadeOut, totalFrames], [MUSIC_BED, 0], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    });
+    return Math.max(0, Math.min(up, down));
+  };
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
       {panels.map((p) => {
@@ -323,7 +346,9 @@ export const Comic: React.FC<ComicProps> = ({ panels, fps, audioSrc, musicSrc, a
         if (sfxSrc) {
           sfxSequences.push(
             <Sequence key={`sfx-${p.index}`} from={cursor} durationInFrames={durationFrames}>
-              <Audio src={sfxSrc} volume={0.7} />
+              {/* loop so a short tick-tock fills the whole (long quiz) panel;
+                  bounded by the Sequence so it stops at the next panel. */}
+              <Audio src={sfxSrc} volume={0.5} loop />
             </Sequence>
           );
         }
@@ -331,7 +356,7 @@ export const Comic: React.FC<ComicProps> = ({ panels, fps, audioSrc, musicSrc, a
         return node;
       })}
       {ambientSrc ? <Audio src={ambientSrc} volume={0.18} loop /> : null}
-      {musicSrc ? <Audio src={musicSrc} volume={0.3} loop /> : null}
+      {musicSrc ? <Audio src={musicSrc} volume={musicVolume} loop /> : null}
       {audioSrc ? <Audio src={audioSrc} volume={1.0} /> : null}
       {sfxSequences}
     </AbsoluteFill>

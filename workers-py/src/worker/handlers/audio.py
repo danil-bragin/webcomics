@@ -48,6 +48,7 @@ class AudioHandler:
         # Per-panel timing: when set we synthesise each line separately and pad
         # to its panel slot; otherwise fall back to the old single-shot TTS.
         panel_duration_ms = int(msg.get("panel_duration_ms") or 0)
+        panel_durations_ms = [int(x) for x in (msg.get("panel_durations_ms") or [])]
         panel_count = int(msg.get("panel_count") or len(captions))
         language = (msg.get("language") or "en").lower()
         if language not in ("en", "ru", "fr"):
@@ -70,10 +71,11 @@ class AudioHandler:
                        language=language)
         start = time.perf_counter()
         try:
-            if panel_duration_ms > 0 and captions:
+            if (panel_duration_ms > 0 or panel_durations_ms) and captions:
                 data, cost = await self._synthesize_per_panel(
                     captions, panel_duration_ms,
                     voice_id=voice_id, model_id=model_id, speed=speed,
+                    panel_durations_ms=panel_durations_ms,
                 )
             else:
                 data, cost = await self.el.synthesize(
@@ -109,6 +111,7 @@ class AudioHandler:
         voice_id: str | None,
         model_id: str | None,
         speed: Any,
+        panel_durations_ms: list[int] | None = None,
     ) -> tuple[bytes, dict]:
         """One TTS call per caption, then ffmpeg stitches them with silence
         padding so segment i lands in slot i of the assemble timeline."""
@@ -130,7 +133,7 @@ class AudioHandler:
             total_cost += float(cost.get("total_cost_usd", 0))
             model_label = cost.get("model") or model_label
 
-        merged = _stitch_to_panels(per_panel_mp3s, panel_duration_ms)
+        merged = _stitch_to_panels(per_panel_mp3s, panel_duration_ms, panel_durations_ms)
         cost = {
             "provider": "elevenlabs",
             "model": model_label or "eleven_flash_v2_5",
@@ -142,33 +145,49 @@ class AudioHandler:
         return merged, cost
 
 
-def _stitch_to_panels(panel_mp3s: list[bytes], panel_duration_ms: int) -> bytes:
-    """Render each panel as exactly panel_duration_ms of audio: TTS bytes
-    followed by enough silence to fill the slot. Pre-renders one shared silence
-    track of the panel length so each segment is reliably the same size."""
+def _stitch_to_panels(panel_mp3s: list[bytes], panel_duration_ms: int,
+                      panel_durations_ms: list[int] | None = None) -> bytes:
+    """Render each panel as exactly its slot length of audio: TTS bytes followed
+    by enough silence to fill the slot. Slot length is per-panel when
+    panel_durations_ms is given (quiz mode: long question panels, short answer
+    panels), else the single panel_duration_ms for every panel."""
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         return b"".join(p for p in panel_mp3s if p)
 
     work = tempfile.mkdtemp(prefix="audio-stitch-")
     try:
-        target_s = panel_duration_ms / 1000.0
         head_delay_s = _PANEL_INTRO_MS / 1000.0
 
-        # Generate a silence track exactly one panel long. Reused for empty
-        # captions + tail padding.
-        silence_path = os.path.join(work, "silence.mp3")
-        subprocess.run(
-            [ffmpeg, "-y", "-f", "lavfi", "-i",
-             "anullsrc=channel_layout=mono:sample_rate=44100",
-             "-t", f"{target_s}", "-c:a", "libmp3lame", "-b:a", "128k",
-             silence_path],
-            check=False, capture_output=True,
-        )
+        # Cache one silence track per distinct slot length (reused for empty
+        # captions + tail padding). Keyed by rounded milliseconds.
+        silence_cache: dict[int, str] = {}
+
+        def _silence(slot_s: float) -> str:
+            key = int(round(slot_s * 1000))
+            path = silence_cache.get(key)
+            if path:
+                return path
+            path = os.path.join(work, f"silence-{key}.mp3")
+            subprocess.run(
+                [ffmpeg, "-y", "-f", "lavfi", "-i",
+                 "anullsrc=channel_layout=mono:sample_rate=44100",
+                 "-t", f"{slot_s}", "-c:a", "libmp3lame", "-b:a", "128k", path],
+                check=False, capture_output=True,
+            )
+            silence_cache[key] = path
+            return path
+
+        def _slot_s(i: int) -> float:
+            if panel_durations_ms and i < len(panel_durations_ms) and panel_durations_ms[i] > 0:
+                return panel_durations_ms[i] / 1000.0
+            return panel_duration_ms / 1000.0
 
         padded_paths: list[str] = []
         for i, data in enumerate(panel_mp3s):
             dst_path = os.path.join(work, f"pad-{i}.mp3")
+            target_s = _slot_s(i)
+            silence_path = _silence(target_s)
             if not data:
                 # Empty caption — entire panel is silence.
                 subprocess.run(["cp", silence_path, dst_path], check=False)
@@ -179,11 +198,9 @@ def _stitch_to_panels(panel_mp3s: list[bytes], panel_duration_ms: int) -> bytes:
             with open(src_path, "wb") as f:
                 f.write(data)
 
-            # Stretch the TTS to exactly target_s by mixing it on top of the
-            # silence track, then trimming to length. amix gracefully handles
-            # a TTS shorter than the silence (silence carries the tail).
-            # adelay pushes the voiceover to head_delay_s so the panel can
-            # establish before the line starts.
+            # Mix the TTS on top of the slot-length silence, then trim to length.
+            # amix duration=longest lets the silence carry the tail (the think
+            # gap on quiz question panels). adelay establishes the panel first.
             head_ms = int(head_delay_s * 1000)
             filter_complex = (
                 f"[0:a]adelay={head_ms}:all=1[v];"

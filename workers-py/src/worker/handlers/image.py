@@ -19,14 +19,24 @@ COMPLETED_STREAM = "pipeline.image.completed"
 FAILED_STREAM = "pipeline.image.failed"
 
 # Retry delays between fal.generate() attempts when fal returns a 5xx, network
-# error, or explicit rate-limit hint. List length = max attempts.
-_RETRY_BACKOFF = (0, 1.0, 3.0)
+# error, or explicit rate-limit hint. List length = max attempts. Longer tail
+# delays handle fal's billing-lock window (their balance sync can take up to a
+# minute to reflect a top-up or settle a parallel-burst soft-cap).
+_RETRY_BACKOFF = (0, 2.0, 10.0, 30.0, 60.0)
 
 
 def _is_transient_fal_error(err: BaseException) -> bool:
     """Return True only when the error pattern indicates a retry might help.
-    Content-moderation rejections, 4xx, and auth failures are NEVER transient."""
+    Content-moderation rejections and auth failures are NEVER transient. A
+    "user is locked / exhausted balance" 403 IS treated as transient because
+    fal's billing service has a sync lag — top-ups and parallel-spend windows
+    settle within a minute, and our long-tail backoff covers that."""
     msg = (str(err) or "").lower()
+    billing_lock_markers = (
+        "user is locked", "exhausted balance", "top up your balance",
+    )
+    if any(m in msg for m in billing_lock_markers):
+        return True
     transient_markers = (
         "timeout", "timed out", "connection", "temporarily unavailable",
         "internal server error", "502 ", "503 ", "504 ", "rate limit",
