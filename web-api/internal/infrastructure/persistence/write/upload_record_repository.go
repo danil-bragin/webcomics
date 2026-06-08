@@ -189,6 +189,16 @@ FROM pipeline_upload_records
 WHERE run_id = $1
 ORDER BY created_at ASC`
 
+func (r *UploadRecordRepository) CountByAccountProviderSince(ctx context.Context, accountID, provider string, since time.Time) (int, error) {
+	var n int
+	err := r.tx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM pipeline_upload_records
+		   WHERE social_account_id = $1 AND provider = $2
+		     AND created_at >= $3 AND status NOT IN ('failed','rejected')`,
+		accountID, provider, since).Scan(&n)
+	return n, err
+}
+
 func (r *UploadRecordRepository) ListByRun(ctx context.Context, runID string) ([]*pipeline.UploadRecord, error) {
 	rows, err := r.tx.Query(ctx, listUploadRecordsByRun, runID)
 	if err != nil {

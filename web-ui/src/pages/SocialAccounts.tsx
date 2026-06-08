@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api, type SocialAccountView, type FxSession } from "@/api/client";
+import { api, type SocialAccountView, type FxSession, type InspectSession } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -228,11 +228,141 @@ function AccountCard({ account, onDelete }: { account: SocialAccountView; onDele
           </div>
         </details>
 
+        <UploadMethodsPanel account={account} />
+        <InspectSessionPanel accountId={account.id} label={account.label} />
+
         <div className="flex justify-end gap-1 pt-1">
           <Button variant="outline" className="h-7 px-2 text-[11px]" onClick={onDelete}>{t("common.delete", "delete")}</Button>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// UploadMethodsPanel shows which upload methods a YouTube account supports and
+// lets the user connect the official API path (OAuth). API is preferred in auto
+// mode (no ban risk); Selenium is the fallback.
+function UploadMethodsPanel({ account }: { account: SocialAccountView }) {
+  const isYouTube = (account.platform || "").startsWith("youtube");
+  if (!isYouTube) return null;
+  const used = account.api_uploads_used ?? 0;
+  const limit = account.api_uploads_limit ?? 6;
+  return (
+    <div className="border-t border-border/40 pt-2 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-muted-foreground">Upload methods</span>
+        <div className="flex items-center gap-1">
+          <span className={`text-[10px] rounded px-1.5 py-0.5 border ${account.has_api ? "border-emerald-500/50 text-emerald-400" : "border-border text-muted-foreground"}`}>
+            API {account.has_api ? "✓" : "—"}
+          </span>
+          <span className={`text-[10px] rounded px-1.5 py-0.5 border ${account.has_selenium ? "border-emerald-500/50 text-emerald-400" : "border-border text-muted-foreground"}`}>
+            Selenium {account.has_selenium ? "✓" : "—"}
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        {account.has_api ? (
+          <span className="text-[11px] text-muted-foreground">
+            {account.oauth_channel_title ? `${account.oauth_channel_title} · ` : ""}
+            API quota: <span className="tabular-nums text-foreground">{used}/{limit}</span> today
+          </span>
+        ) : (
+          <span className="text-[11px] text-muted-foreground">Connect API for ban-safe uploads</span>
+        )}
+        <a
+          href={`/api/youtube-oauth/start?account_id=${account.id}`}
+          target="_blank" rel="noreferrer"
+          className="h-7 px-2 text-[11px] inline-flex items-center rounded border border-border hover:border-primary/50">
+          {account.has_api ? "Reconnect API ↗" : "Connect via API ↗"}
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// InspectSessionPanel lets the user open a live, viewable Firefox running on
+// this account's saved profile — to watch the session and confirm the channel
+// is still logged in. Backed by a jlesage/firefox container over noVNC.
+function InspectSessionPanel({ accountId, label }: { accountId: string; label?: string }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  // Poll status only while the panel is open OR a session may be running.
+  const status = useQuery<InspectSession>({
+    queryKey: ["inspect-session", accountId],
+    queryFn: () => api.getInspectSession(accountId),
+    refetchInterval: open ? 2000 : false,
+  });
+  const sess = status.data;
+  const ready = sess?.status === "ready" && sess.vnc_url;
+
+  const start = useMutation({
+    mutationFn: () => api.startInspectSession(accountId),
+    onSuccess: (s) => {
+      setOpen(true);
+      qc.setQueryData(["inspect-session", accountId], s);
+      qc.invalidateQueries({ queryKey: ["inspect-session", accountId] });
+    },
+    onError: (e: Error) => toast.push("error", e.message),
+  });
+  const stop = useMutation({
+    mutationFn: () => api.stopInspectSession(accountId),
+    onSuccess: () => {
+      setOpen(false);
+      qc.setQueryData(["inspect-session", accountId], { status: "none" });
+    },
+    onError: (e: Error) => toast.push("error", e.message),
+  });
+
+  return (
+    <div className="border-t border-border/40 pt-2 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-muted-foreground">
+          {t("social.session", "Live session")}
+          {ready ? <span className="ml-2 inline-block h-2 w-2 rounded-full bg-emerald-500 align-middle" /> : null}
+        </span>
+        <div className="flex items-center gap-1">
+          {ready && sess?.vnc_url ? (
+            <>
+              <a href={sess.vnc_url} target="_blank" rel="noreferrer"
+                 className="h-7 px-2 text-[11px] inline-flex items-center rounded border border-border hover:border-primary/50">
+                {t("social.openTab", "Open in tab ↗")}
+              </a>
+              <Button variant="outline" className="h-7 px-2 text-[11px]" onClick={() => setOpen((v) => !v)}>
+                {open ? t("social.hide", "Hide") : t("social.watch", "Watch")}
+              </Button>
+              <Button variant="outline" className="h-7 px-2 text-[11px]" disabled={stop.isPending} onClick={() => stop.mutate()}>
+                {stop.isPending ? "…" : t("social.stop", "Stop")}
+              </Button>
+            </>
+          ) : (
+            <Button className="h-7 px-2 text-[11px]" disabled={start.isPending}
+              onClick={() => start.mutate()}>
+              {start.isPending ? t("social.starting", "Starting…") : t("social.openSession", "Open session")}
+            </Button>
+          )}
+        </div>
+      </div>
+      {start.isPending ? (
+        <p className="text-[10px] text-muted-foreground">{t("social.bootingFirefox", "Booting Firefox with this profile (~10–30s)…")}</p>
+      ) : null}
+      {sess?.status === "error" ? (
+        <p className="text-[10px] text-red-400">{sess.error || "failed to start session"}</p>
+      ) : null}
+      {open && ready && sess?.vnc_url ? (
+        <div className="space-y-1">
+          <iframe
+            title={`firefox-${label || accountId}`}
+            src={sess.vnc_url}
+            className="w-full h-[520px] rounded border border-border bg-black"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            {t("social.sessionHint", "Live view of the logged-in browser. Navigate to YouTube Studio to verify access. Stop when done.")}
+          </p>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

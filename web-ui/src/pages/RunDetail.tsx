@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api, type RunView, type StepView, type AssetView, type AttemptView, type UploadRecordView, type SocialAccountView } from "@/api/client";
+import { api, type RunView, type StepView, type AssetView, type AttemptView, type UploadRecordView, type SocialAccountView, type UploadProgressView } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -832,6 +832,7 @@ function UploadRecordCard({ rec, onChange }: { rec: UploadRecordView; onChange: 
           </Button>
         </div>
       </div>
+      {UPLOAD_ACTIVE_STATUS.has(rec.status) ? <LiveUploadProgress runId={rec.run_id} status={rec.status} /> : null}
       {rec.external_ref ? <UploadMetricsRow rec={rec} /> : null}
       {rec.hook ? (
         <p className="text-[11px] text-muted-foreground italic">Hook: {rec.hook}</p>
@@ -869,6 +870,91 @@ function UploadRecordCard({ rec, onChange }: { rec: UploadRecordView; onChange: 
       {(rec.screenshot_trail ?? []).length > 0 ? (
         <ScreenshotTrailStrip trail={rec.screenshot_trail!} />
       ) : null}
+    </div>
+  );
+}
+
+// Statuses where a selenium upload may be walking through YT Studio right now.
+// While in any of these we poll the live screenshot feed every 2s.
+const UPLOAD_ACTIVE_STATUS = new Set<UploadRecordView["status"]>([
+  "pending", "metadata_ready", "pending_review", "approved", "uploading",
+]);
+
+// Human-friendly stage labels keyed by the stage slug the worker emits.
+const STAGE_LABELS: Record<string, string> = {
+  "00-studio-opened": "Открыл YouTube Studio",
+  "01-file-picked": "Загрузил видеофайл",
+  "02-title-typed": "Ввёл заголовок",
+  "03-metadata-filled": "Заполнил описание и теги",
+  "04-next-video-elements": "Шаг: элементы видео",
+  "04-next-checks": "Шаг: проверки",
+  "04-next-visibility": "Шаг: доступ",
+  "05-pre-done": "Готов к публикации",
+  "06-post-done": "Нажал «Готово»",
+  "07-no-link": "Ссылка не появилась",
+};
+
+function prettyStage(stage: string): string {
+  const slug = stage.replace(/^\d+-(step|fail)-/, "");
+  return STAGE_LABELS[slug] ?? STAGE_LABELS[stage] ?? slug.replace(/-/g, " ");
+}
+
+function LiveUploadProgress({ runId, status }: { runId: string; status: UploadRecordView["status"] }) {
+  const q = useQuery<UploadProgressView>({
+    queryKey: ["upload-progress", runId],
+    queryFn: () => api.getUploadProgress(runId),
+    refetchInterval: 2000,
+  });
+  const frames = q.data?.frames ?? [];
+  const [pinned, setPinned] = useState<number | null>(null);
+  // Default to the latest frame unless the user pinned one.
+  const activeIdx = pinned ?? (frames.length > 0 ? frames.length - 1 : 0);
+  const active = frames[activeIdx];
+  const failed = frames.some((f) => f.kind === "fail");
+  if (frames.length === 0) {
+    return (
+      <div className="rounded border border-primary/30 bg-primary/5 p-3 flex items-center gap-2">
+        <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" />
+        <span className="text-xs text-muted-foreground">
+          Загрузка запускается… ({status}) — браузер открывает YouTube Studio
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded border border-primary/30 bg-primary/5 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className={`inline-block h-2 w-2 rounded-full ${failed ? "bg-red-500" : "bg-primary animate-pulse"}`} />
+          <span className="text-xs font-medium">
+            {failed ? "Загрузка остановилась" : "Идёт загрузка"} — этап {activeIdx + 1}/{frames.length}
+          </span>
+        </div>
+        <span className="text-[11px] text-muted-foreground">{prettyStage(active.stage)}</span>
+      </div>
+      {/* stage stepper */}
+      <div className="flex gap-1 overflow-x-auto pb-1">
+        {frames.map((f, i) => (
+          <button
+            key={f.idx + "-" + i}
+            onClick={() => setPinned(i === activeIdx ? null : i)}
+            title={prettyStage(f.stage)}
+            className={`shrink-0 text-[9px] uppercase rounded border px-2 py-1 transition-colors ${
+              i === activeIdx ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"
+            } ${f.kind === "fail" ? "text-red-400 border-red-400/50" : ""}`}>
+            {i + 1}
+          </button>
+        ))}
+      </div>
+      {active.url ? (
+        <a href={active.url} target="_blank" rel="noreferrer">
+          <img src={active.url} alt={active.stage}
+            className="w-full max-h-96 object-contain rounded border border-border bg-black" />
+        </a>
+      ) : null}
+      <p className="text-[10px] text-muted-foreground">
+        {prettyStage(active.stage)} · обновляется каждые 2с
+      </p>
     </div>
   );
 }

@@ -103,7 +103,25 @@ class UploadHandler:
         start = time.perf_counter()
         screenshot_asset_id = ""
         try:
-            if provider.endswith("_selenium"):
+            if provider == "youtube_api":
+                # Official Data API v3 upload (no browser). Refresh token comes
+                # from the social account via the scheduler payload params.
+                platform_captions = captions.get("youtube") or {}
+                meta = _resolve_metadata({"youtube": platform_captions}, params)
+                from worker.providers.youtube_api import upload as yt_api_upload
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, lambda: yt_api_upload(
+                    store=self.store,
+                    video_key=video_key,
+                    refresh_token=str(params.get("oauth_refresh_token") or ""),
+                    client_id=os.getenv("GOOGLE_OAUTH_CLIENT_ID", ""),
+                    client_secret=os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", ""),
+                    meta=meta,
+                ))
+                external_ref = result["video_url"]
+                video_id = result["video_id"]
+                final_visibility = result["final_visibility"]
+            elif provider.endswith("_selenium"):
                 if not firefox_profile:
                     raise RuntimeError(f"firefox_profile_path required for {provider}")
                 # Clone profile to a temp dir so two Firefox instances can run
@@ -114,6 +132,7 @@ class UploadHandler:
                     result = await self._upload_selenium(
                         provider=provider,
                         run_id=run_id,
+                        step_index=step_index,
                         video_key=video_key,
                         firefox_profile=cloned_profile,
                         captions=captions,
@@ -185,6 +204,7 @@ class UploadHandler:
         self,
         provider: str,
         run_id: str,
+        step_index: int,
         video_key: str,
         firefox_profile: str,
         captions: dict,
@@ -198,7 +218,13 @@ class UploadHandler:
         platform_captions = captions.get(platform_key) or captions.get("youtube") or {}
         meta = _resolve_metadata({platform_key: platform_captions, "youtube": platform_captions}, params)
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
+        # Selenium drives Firefox in a worker thread, dumping a screenshot per
+        # stage into /tmp/upload-screenshots/{run_id}. Run a concurrent pump
+        # that mirrors each new screenshot into MinIO under a "live/" prefix so
+        # the UI can poll the current stage WHILE the upload is in flight,
+        # instead of only seeing the trail after it finishes.
+        screenshot_dir = f"/tmp/upload-screenshots/{run_id}"
+        fut = loop.run_in_executor(
             None,
             lambda: _do_selenium_upload(
                 provider=provider,
@@ -209,6 +235,59 @@ class UploadHandler:
                 run_id=run_id,
             ),
         )
+        pump = asyncio.create_task(
+            self._pump_live_screenshots(run_id, step_index, screenshot_dir, fut)
+        )
+        try:
+            return await fut
+        finally:
+            # Don't cancel — let the pump observe the now-done future, run its
+            # final sweep (so the failure frames, e.g. the YT rate-limit screen,
+            # get mirrored live too), then exit on its own. Bounded by `interval`.
+            try:
+                await asyncio.wait_for(pump, timeout=10.0)
+            except Exception:
+                pump.cancel()
+
+    async def _pump_live_screenshots(
+        self,
+        run_id: str,
+        step_index: int,
+        local_dir: str,
+        done: "asyncio.Future",
+        interval: float = 1.5,
+    ) -> None:
+        """Mirror new per-stage screenshots into MinIO at a live/ prefix until
+        the upload future completes. Best-effort — never raises into the upload
+        flow. Each object key is runs/{run_id}/upload/{step}/live/{name} so the
+        API can list+presign them ordered by the NN- lexical prefix."""
+        loop = asyncio.get_running_loop()
+        seen: set[str] = set()
+
+        async def sweep() -> None:
+            if not os.path.isdir(local_dir):
+                return
+            for name in sorted(os.listdir(local_dir)):
+                if not name.endswith(".png") or name in seen:
+                    continue
+                local = os.path.join(local_dir, name)
+                key = f"runs/{run_id}/upload/{step_index}/live/{name}"
+                try:
+                    await loop.run_in_executor(
+                        None,
+                        lambda l=local, k=key: self.store.client.fput_object(
+                            self.store.bucket, k, l, content_type="image/png",
+                        ),
+                    )
+                    seen.add(name)
+                except Exception as e:
+                    log.warning("live screenshot upload failed", name=name, err=str(e))
+
+        while not done.done():
+            await sweep()
+            await asyncio.sleep(interval)
+        # Final sweep so the last stage (e.g. error frame) is always mirrored.
+        await sweep()
 
     async def _fetch_video(self, key: str) -> bytes:
         loop = asyncio.get_running_loop()

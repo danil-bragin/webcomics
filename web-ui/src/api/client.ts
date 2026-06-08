@@ -101,6 +101,12 @@ export type SocialAccountView = components["schemas"]["SocialAccountView"] & {
   limit_window_hours?: number;
   is_verified?: boolean;
   min_gap_seconds?: number;
+  // Upload-method capabilities + API quota.
+  has_selenium?: boolean;
+  has_api?: boolean;
+  oauth_channel_title?: string;
+  api_uploads_used?: number;
+  api_uploads_limit?: number;
 };
 export type SocialAccountBody = components["schemas"]["SocialAccountBody"];
 
@@ -251,6 +257,13 @@ export const api = {
     }),
   getScreenshotUrl: (objectKey: string) =>
     request<{ url: string }>(`/api/upload-records/screenshot-url?key=${encodeURIComponent(objectKey)}`),
+  getUploadProgress: (runId: string) =>
+    request<UploadProgressView>(`/api/runs/${runId}/upload-progress`),
+  generateUploadMetadata: (runId: string, platform = "youtube", language = "en") =>
+    request<GeneratedMetadata>(`/api/runs/${runId}/generate-metadata`, {
+      method: "POST",
+      body: JSON.stringify({ platform, language }),
+    }),
   listMusicLibrary: () => request<MusicTrack[]>("/api/music-library"),
 
   // Audio library (music / sfx / ambient / voice).
@@ -330,6 +343,13 @@ export const api = {
     request<void>(`/api/social/accounts/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
   deleteSocialAccountGlobal: (id: string) =>
     request<void>(`/api/social/accounts/${id}`, { method: "DELETE" }),
+  // Live Firefox viewer session on an account's profile (watch + verify auth).
+  startInspectSession: (id: string) =>
+    request<InspectSession>(`/api/social/accounts/${id}/inspect`, { method: "POST", body: "{}" }),
+  getInspectSession: (id: string) =>
+    request<InspectSession>(`/api/social/accounts/${id}/inspect`),
+  stopInspectSession: (id: string) =>
+    request<void>(`/api/social/accounts/${id}/inspect/stop`, { method: "POST", body: "{}" }),
 
   // Project ↔ account linking (Phase 3).
   linkSocialAccount: (projectId: string, accountId: string, asDefault = false) =>
@@ -419,6 +439,35 @@ export type UploadRecordView = {
   last_known_shares?: number;
   last_fetched_at?: string | null;
   fetch_error?: string;
+};
+
+export type UploadProgressFrame = {
+  idx: number;
+  kind: "step" | "fail";
+  stage: string;
+  url: string;
+};
+
+export type UploadProgressView = {
+  frames: UploadProgressFrame[];
+  current: string;
+  count: number;
+};
+
+export type GeneratedMetadata = {
+  title: string;
+  description: string;
+  tags: string[];
+  hashtags: string[];
+};
+
+export type InspectSession = {
+  id?: string;
+  port?: number;
+  vnc_url?: string;
+  status: "none" | "starting" | "ready" | "error" | "finished";
+  label?: string;
+  error?: string;
 };
 
 export type AccountUploadStats = {

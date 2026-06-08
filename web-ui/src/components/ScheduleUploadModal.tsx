@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api, type AccountWindowStats, type SocialAccountView } from "@/api/client";
+import { api, type AccountWindowStats, type SocialAccountView, type GeneratedMetadata } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
@@ -56,8 +56,42 @@ export function ScheduleUploadModal({
   const [accountId, setAccountId] = useState(defaultAccountId || accounts[0]?.id || "");
   const [when, setWhen] = useState<string>(initialAt ? isoToLocal(initialAt) : defaultSlot());
   const [visibility, setVisibility] = useState<"public" | "unlisted" | "private">("public");
+  // "" = auto (API→Selenium); "api" / "selenium" force a method.
+  const [uploadMethod, setUploadMethod] = useState<"" | "api" | "selenium">("");
+  const selectedAcct = accounts.find((a) => a.id === accountId);
+  const acctHasAPI = !!selectedAcct?.has_api;
+  const acctHasSelenium = !!selectedAcct?.has_selenium;
   const [blocked, setBlocked] = useState<string | null>(null);
   const [nextFree, setNextFree] = useState<string | null>(null);
+
+  // Editable, AI-generated upload metadata (title / description+hashtags / tags).
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [tags, setTags] = useState("");
+  const [hashtags, setHashtags] = useState<string[]>([]);
+  const [metaTouched, setMetaTouched] = useState(false);
+
+  function applyMeta(m: GeneratedMetadata) {
+    setTitle(m.title || "");
+    // Description from the model already ends with the hashtag line; keep it.
+    setDescription(m.description || "");
+    setTags((m.tags || []).join(", "));
+    setHashtags(m.hashtags || []);
+  }
+
+  const genMeta = useMutation({
+    mutationFn: () => api.generateUploadMetadata(runId, "youtube"),
+    onSuccess: (m) => { applyMeta(m); setMetaTouched(false); },
+    onError: (e: Error) => toast.push("error", e.message),
+  });
+
+  // Auto-generate once when the modal opens, unless the user already edited.
+  useEffect(() => {
+    if (!metaTouched && !title && !genMeta.isPending) {
+      genMeta.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const atISO = useMemo(() => {
     try { return localToISO(when); } catch { return ""; }
@@ -79,24 +113,26 @@ export function ScheduleUploadModal({
 
   const submit = useMutation({
     mutationFn: () => {
+      const tagList = tags.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
       const metadata: Record<string, unknown> = {
         video_key: runVideoKey,
         params: {
           platform: accounts.find((a) => a.id === accountId)?.platform ?? "youtube_selenium",
           visibility,
+          ...(uploadMethod ? { upload_method: uploadMethod } : {}),
           category_id: "22",
           category_label: "People & Blogs",
           made_for_kids: false,
-          tags: ["meme", "comic", "shorts", "manga"],
-          title: runPrompt ?? "",
-          description: (runCaptions ?? []).join("\n"),
+          tags: tagList,
+          title: title.trim(),
+          description: description.trim(),
         },
         captions: {
           youtube: {
-            title: runPrompt ?? "",
-            description: (runCaptions ?? []).join("\n"),
-            tags: ["meme", "comic", "shorts", "manga"],
-            hashtags: ["#shorts", "#meme", "#manga"],
+            title: title.trim(),
+            description: description.trim(),
+            tags: tagList,
+            hashtags: hashtags,
           },
         },
       };
@@ -154,11 +190,59 @@ export function ScheduleUploadModal({
           <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("schedule.visibility", "Visibility")}</span>
           <select value={visibility} onChange={(e) => setVisibility(e.target.value as typeof visibility)}
             className="h-9 w-full rounded border border-border bg-secondary/30 px-2 text-sm">
-            <option value="public">public</option>
-            <option value="unlisted">unlisted</option>
+            <option value="public">public (виден всем)</option>
+            <option value="unlisted">unlisted (по ссылке)</option>
             <option value="private">private</option>
           </select>
         </label>
+
+        {(selectedAcct?.platform || "").startsWith("youtube") ? (
+          <label className="block space-y-1">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("schedule.method", "Метод загрузки")}</span>
+            <select value={uploadMethod} onChange={(e) => setUploadMethod(e.target.value as typeof uploadMethod)}
+              className="h-9 w-full rounded border border-border bg-secondary/30 px-2 text-sm">
+              <option value="">Авто (API → Selenium)</option>
+              <option value="api" disabled={!acctHasAPI}>Только API{acctHasAPI ? "" : " (не подключён)"}</option>
+              <option value="selenium" disabled={!acctHasSelenium}>Только Selenium{acctHasSelenium ? "" : " (нет профиля)"}</option>
+            </select>
+            <span className="text-[10px] text-muted-foreground">
+              API безопаснее (не банят); авто берёт API пока есть квота, потом Selenium.
+            </span>
+          </label>
+        ) : null}
+
+        {/* AI-generated, editable upload metadata */}
+        <div className="space-y-2 rounded border border-border/60 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium">{t("schedule.metadata", "Описание для публикации")}</span>
+            <Button variant="outline" className="h-7 px-2 text-[11px]" disabled={genMeta.isPending}
+              onClick={() => genMeta.mutate()}>
+              {genMeta.isPending ? t("schedule.generating", "Генерирую…") : t("schedule.regenerate", "✨ Перегенерировать")}
+            </Button>
+          </div>
+          <label className="block space-y-1">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("schedule.metaTitle", "Заголовок")}</span>
+            <input value={title} maxLength={100}
+              onChange={(e) => { setTitle(e.target.value); setMetaTouched(true); }}
+              className="h-9 w-full rounded border border-border bg-secondary/30 px-2 text-sm"
+              placeholder={genMeta.isPending ? "…" : "Заголовок видео"} />
+            <span className="text-[10px] text-muted-foreground">{title.length}/100</span>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("schedule.metaDesc", "Описание + хэштеги")}</span>
+            <textarea value={description} rows={5}
+              onChange={(e) => { setDescription(e.target.value); setMetaTouched(true); }}
+              className="w-full rounded border border-border bg-secondary/30 px-2 py-1.5 text-sm whitespace-pre-wrap"
+              placeholder={genMeta.isPending ? "Генерирую вирусное описание…" : "Описание"} />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("schedule.metaTags", "Теги (через запятую)")}</span>
+            <textarea value={tags} rows={2}
+              onChange={(e) => { setTags(e.target.value); setMetaTouched(true); }}
+              className="w-full rounded border border-border bg-secondary/30 px-2 py-1.5 text-[12px]"
+              placeholder="tag1, tag2, …" />
+          </label>
+        </div>
 
         {avail.data ? (
           <div className="flex items-center justify-between text-[11px]">
@@ -204,7 +288,7 @@ export function ScheduleUploadModal({
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose}>{t("common.cancel", "Cancel")}</Button>
-          <Button disabled={submit.isPending || !atISO} onClick={() => submit.mutate()}>
+          <Button disabled={submit.isPending || !atISO || !title.trim()} onClick={() => submit.mutate()}>
             {submit.isPending ? "…" : t("schedule.submit", "Schedule")}
           </Button>
         </div>
