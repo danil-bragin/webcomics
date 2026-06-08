@@ -30,17 +30,6 @@ jobs:
           --health-timeout 3s
           --health-retries 10
         ports: ["6380:6379"]
-      minio:
-        image: minio/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        ports: ["9000:9000"]
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
     defaults:
       run:
         working-directory: web-api
@@ -55,6 +44,21 @@ jobs:
           go-version: "1.25"
           cache: true
           cache-dependency-path: web-api/go.sum
+      - name: start minio
+        # GitHub Actions `services:` can't pass a container command, but the
+        # minio image needs `server /data` to actually run — so start it here
+        # with full control and wait for its health endpoint.
+        run: |
+          docker run -d --name minio \
+            -p 9000:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:latest server /data --console-address ":9001"
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 1
+          done
+          curl -sf http://localhost:9000/minio/health/live
       - name: vet
         run: go vet ./...
       - name: test
