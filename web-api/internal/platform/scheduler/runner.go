@@ -10,7 +10,9 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -39,9 +41,13 @@ type Runner struct {
 type fireable struct {
 	Row            *domsched.ScheduledUpload
 	AccountFP      string
-	Platform       string
+	Platform       string // effective provider: youtube_api | youtube_selenium | ...
+	RefreshToken   string // set for youtube_api
 	UploadRecordID string
 }
+
+// apiDailyUploadCap ≈ floor(10000 quota / 1600 per videos.insert).
+const apiDailyUploadCap = 6
 
 func New(u uow.Manager, r *redis.Client, log *slog.Logger) *Runner {
 	return &Runner{uow: u, redis: r, log: log}
@@ -94,10 +100,18 @@ func (r *Runner) tick(ctx context.Context) error {
 			if err := repos.Scheduler().Save(ctx, row); err != nil {
 				return err
 			}
+			// Pick the effective upload provider for YouTube accounts. Priority:
+			// a forced method in the schedule metadata wins; else AUTO prefers
+			// the API (legit, no ban risk) while the daily quota lasts, then
+			// falls back to Selenium.
+			effProvider, refreshToken, perr := r.pickProvider(ctx, repos, row, acct)
+			if perr != nil {
+				_ = row.MarkFailed(now, perr.Error())
+				_ = repos.Scheduler().Save(ctx, row)
+				continue
+			}
 			// Create pipeline_upload_records row so analytics ticker has a
 			// target to poll once the worker reports an external_ref.
-			// Metadata is sparse for scheduler-triggered uploads — the
-			// caption/title comes from the schedule row's metadata.params.
 			meta := pipeline.UploadMetadata{}
 			if params, ok := row.Metadata()["params"].(map[string]any); ok {
 				if v, ok := params["title"].(string); ok {
@@ -111,14 +125,15 @@ func (r *Runner) tick(ctx context.Context) error {
 				}
 			}
 			rec := pipeline.NewUploadRecord(row.RunID(), "", row.SocialAccountID(),
-				acct.Platform(), 99, meta)
+				effProvider, 99, meta)
 			if err := repos.UploadRecords().Save(ctx, rec); err != nil {
 				return err
 			}
 			fireables = append(fireables, fireable{
 				Row:            row,
 				AccountFP:      acct.FirefoxProfilePath(),
-				Platform:       acct.Platform(),
+				Platform:       effProvider,
+				RefreshToken:   refreshToken,
 				UploadRecordID: rec.ID().String(),
 			})
 		}
@@ -132,7 +147,7 @@ func (r *Runner) tick(ctx context.Context) error {
 	//    in_flight — operator can manually retry; we don't auto-rollback to
 	//    avoid hot retry loops on persistent Redis outage.
 	for _, f := range fireables {
-		payload := buildUploadPayload(f.Row, f.AccountFP, f.Platform)
+		payload := buildUploadPayload(f.Row, f.AccountFP, f.Platform, f.RefreshToken)
 		raw, _ := json.Marshal(payload)
 		if err := r.redis.XAdd(ctx, &redis.XAddArgs{
 			Stream: uploadStream,
@@ -148,9 +163,59 @@ func (r *Runner) tick(ctx context.Context) error {
 	return nil
 }
 
+// pickProvider chooses the effective upload provider for a YouTube account.
+// Forced method (schedule metadata params.upload_method = "api"|"selenium")
+// wins; AUTO prefers the API while the daily quota lasts, then Selenium.
+// Returns (effectiveProvider, refreshToken, error). Non-YouTube accounts keep
+// their platform unchanged.
+func (r *Runner) pickProvider(ctx context.Context, repos uow.Repositories, row *domsched.ScheduledUpload, acct *projects.SocialAccount) (string, string, error) {
+	platform := acct.Platform()
+	if !strings.HasPrefix(platform, "youtube") {
+		return platform, "", nil
+	}
+	forced := ""
+	if params, ok := row.Metadata()["params"].(map[string]any); ok {
+		forced, _ = params["upload_method"].(string)
+	}
+	hasAPI := acct.HasAPIUpload()
+	hasSel := acct.HasSeleniumUpload()
+
+	switch forced {
+	case "selenium":
+		if !hasSel {
+			return "", "", fmt.Errorf("forced selenium but account has no firefox profile")
+		}
+		return "youtube_selenium", "", nil
+	case "api":
+		if !hasAPI {
+			return "", "", fmt.Errorf("forced api but account not connected via API")
+		}
+		return "youtube_api", acct.OAuthRefreshToken(), nil
+	}
+
+	// AUTO: API first if the daily quota still has room.
+	if hasAPI {
+		since := time.Now().Add(-24 * time.Hour)
+		used, err := repos.UploadRecords().CountByAccountProviderSince(ctx, acct.ID().String(), "youtube_api", since)
+		if err == nil && used < apiDailyUploadCap {
+			return "youtube_api", acct.OAuthRefreshToken(), nil
+		}
+		r.log.Info("API quota used up — falling back to selenium",
+			"account", acct.ID().String(), "used", used)
+	}
+	if hasSel {
+		return "youtube_selenium", "", nil
+	}
+	if hasAPI {
+		// No selenium fallback available — try API anyway, let YouTube decide.
+		return "youtube_api", acct.OAuthRefreshToken(), nil
+	}
+	return "", "", fmt.Errorf("account has neither API token nor firefox profile")
+}
+
 // buildUploadPayload mirrors the existing pipeline.upload.requested shape so
 // the upload worker doesn't need scheduler-specific code paths.
-func buildUploadPayload(row *domsched.ScheduledUpload, profilePath, platform string) map[string]any {
+func buildUploadPayload(row *domsched.ScheduledUpload, profilePath, platform, refreshToken string) map[string]any {
 	md := row.Metadata()
 	if md == nil {
 		md = map[string]any{}
@@ -162,8 +227,11 @@ func buildUploadPayload(row *domsched.ScheduledUpload, profilePath, platform str
 	if params == nil {
 		params = map[string]any{}
 	}
-	if _, ok := params["platform"]; !ok {
-		params["platform"] = platform
+	// Force the resolved platform/method (provider-pick may have switched it).
+	params["platform"] = platform
+	if refreshToken != "" {
+		// youtube_api: hand the worker the channel's OAuth refresh token.
+		params["oauth_refresh_token"] = refreshToken
 	}
 	return map[string]any{
 		"run_id":               row.RunID(),

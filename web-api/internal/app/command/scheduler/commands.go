@@ -190,10 +190,67 @@ func (h *RescheduleUploadHandler) Handle(ctx context.Context, cmd RescheduleUplo
 	return out, err
 }
 
+// --- SettleScheduledUpload ---
+//
+// Closes the in-flight scheduled_uploads row once the worker reports a terminal
+// result for the run. Without this the row stays in_flight forever and the
+// schedule UI can't tell uploaded from stuck. Best-effort: if no in_flight row
+// exists for the run (e.g. an ad-hoc upload not driven by the scheduler) the
+// command is a no-op and returns nil.
+
+type SettleScheduledUpload struct {
+	RunID       string
+	Success     bool
+	ExternalRef string
+	Error       string
+}
+
+func (SettleScheduledUpload) IsCommand() {}
+
+type SettleScheduledUploadResult struct{ Settled bool }
+
+type SettleScheduledUploadHandler struct{ uow uow.Manager }
+
+func NewSettleScheduledUploadHandler(m uow.Manager) *SettleScheduledUploadHandler {
+	return &SettleScheduledUploadHandler{uow: m}
+}
+
+func (h *SettleScheduledUploadHandler) Handle(ctx context.Context, cmd SettleScheduledUpload) (SettleScheduledUploadResult, error) {
+	var out SettleScheduledUploadResult
+	err := h.uow.WithinTx(ctx, func(ctx context.Context, u uow.UnitOfWork) error {
+		repo := u.Repositories().Scheduler()
+		su, err := repo.FindByRunPending(ctx, cmd.RunID)
+		if err != nil {
+			// No in-flight row → ad-hoc upload, nothing to settle. Swallow the
+			// not-found so the upload result path stays clean.
+			return nil
+		}
+		now := time.Now().UTC()
+		if cmd.Success {
+			if err := su.MarkCompleted(now, cmd.ExternalRef); err != nil {
+				return err
+			}
+		} else {
+			if err := su.MarkFailed(now, cmd.Error); err != nil {
+				return err
+			}
+		}
+		if err := repo.Save(ctx, su); err != nil {
+			return err
+		}
+		out.Settled = true
+		return nil
+	})
+	return out, err
+}
+
 // --- Bus registrations ---
 
 func ScheduleUploadOnBus(r *bus.Registry, m uow.Manager) {
 	bus.RegisterCommand[ScheduleUpload, ScheduleUploadResult](r, NewScheduleUploadHandler(m))
+}
+func SettleScheduledUploadOnBus(r *bus.Registry, m uow.Manager) {
+	bus.RegisterCommand[SettleScheduledUpload, SettleScheduledUploadResult](r, NewSettleScheduledUploadHandler(m))
 }
 func CancelScheduledUploadOnBus(r *bus.Registry, m uow.Manager) {
 	bus.RegisterCommand[CancelScheduledUpload, CancelScheduledUploadResult](r, NewCancelScheduledUploadHandler(m))
