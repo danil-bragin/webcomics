@@ -1,6 +1,9 @@
 package pipeline
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // RunWriteRepository is the write-side port for the Run aggregate.
 // Bound to a UoW transaction. Persists the full Run state plus any new
@@ -29,6 +32,10 @@ type UploadRecordWriteRepository interface {
 	Save(ctx context.Context, r *UploadRecord) error
 	GetByID(ctx context.Context, id UploadRecordID) (*UploadRecord, error)
 	ListByRun(ctx context.Context, runID string) ([]*UploadRecord, error)
+	// CountByAccountProviderSince counts non-failed upload records for an
+	// account+provider created at/after `since` — used to enforce the daily
+	// YouTube API quota (videos.insert ≈ 1600 units, 10k/day ⇒ ~6/day).
+	CountByAccountProviderSince(ctx context.Context, accountID, provider string, since time.Time) (int, error)
 }
 
 // AssetStore is the port for binary object storage (MinIO/S3).

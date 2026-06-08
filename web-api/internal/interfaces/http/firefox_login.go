@@ -58,6 +58,7 @@ type fxLoginMgr struct {
 	cfg      FirefoxLoginConfig
 	mu       sync.Mutex
 	sessions map[string]*fxSession
+	inspects map[string]*fxSession // keyed by social-account id
 	usedPort map[int]bool
 }
 
@@ -74,11 +75,118 @@ func newFxLoginMgr(cfg FirefoxLoginConfig) *fxLoginMgr {
 	if cfg.MaxPort == 0 {
 		cfg.MaxPort = 5899
 	}
-	m := &fxLoginMgr{cfg: cfg, sessions: map[string]*fxSession{}, usedPort: map[int]bool{}}
+	m := &fxLoginMgr{cfg: cfg, sessions: map[string]*fxSession{}, inspects: map[string]*fxSession{}, usedPort: map[int]bool{}}
 	// Stale containers from a previous API process hold ports that net.Listen
 	// can't see (docker-proxy binds them). Reap orphaned wcm-fx-* on startup.
 	_ = exec.Command("sh", "-c", "docker ps -aq --filter name=wcm-fx- | xargs -r docker rm -f").Run()
 	return m
+}
+
+// hostDirForWorkerProfile maps a SocialAccount.firefox_profile_path (a path in
+// the worker mount, e.g. "/profiles/<uuid>/profile") back to the host directory
+// jlesage/firefox mounts at /config (e.g. "<HostProfilesDir>/<uuid>"). That dir
+// holds the full jlesage layout (.mozilla, profile/, xdg/…) captured during the
+// original login, so re-mounting it reproduces the logged-in browser exactly.
+func (m *fxLoginMgr) hostDirForWorkerProfile(workerProfilePath string) (string, error) {
+	rel := strings.TrimPrefix(workerProfilePath, m.cfg.WorkerMountPoint)
+	rel = strings.TrimPrefix(rel, "/")
+	parent := filepath.Dir(rel) // "<uuid>/profile" → "<uuid>"
+	if parent == "." || parent == "" || parent == "/" {
+		return "", fmt.Errorf("cannot derive host dir from profile path %q", workerProfilePath)
+	}
+	return filepath.Join(m.cfg.HostProfilesDir, parent), nil
+}
+
+func containerRunning(name string) bool {
+	out, err := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", name).CombinedOutput()
+	return err == nil && strings.TrimSpace(string(out)) == "true"
+}
+
+// inspect launches (or reuses) a viewable jlesage/firefox container mounting an
+// existing account profile, so the user can watch the logged-in session over
+// noVNC and confirm auth still works. RW mount so a manual re-login persists.
+func (m *fxLoginMgr) inspect(ctx context.Context, accountID, workerProfilePath, label string) (*fxSession, error) {
+	if !m.cfg.enabled() {
+		return nil, errors.New("firefox-login disabled: set FIREFOX_PROFILES_DIR env to an absolute host path")
+	}
+	// Reuse a live session for this account if its container is still up.
+	m.mu.Lock()
+	if s, ok := m.inspects[accountID]; ok {
+		if containerRunning(s.Container) {
+			m.mu.Unlock()
+			return s, nil
+		}
+		// Stale — drop it and recreate below.
+		m.usedPort[s.Port] = false
+		delete(m.inspects, accountID)
+	}
+	hostDir, err := m.hostDirForWorkerProfile(workerProfilePath)
+	if err != nil {
+		m.mu.Unlock()
+		return nil, err
+	}
+	port, err := m.allocPort()
+	if err != nil {
+		m.mu.Unlock()
+		return nil, err
+	}
+	id := uuid.NewString()
+	container := "wcm-fxi-" + id[:8]
+	sess := &fxSession{
+		ID: id, Port: port, Container: container, HostDir: hostDir,
+		VNCURL: fmt.Sprintf("http://localhost:%d", port), Status: "starting",
+		Platform: "", Label: label, CreatedAt: time.Now(),
+	}
+	m.inspects[accountID] = sess
+	m.mu.Unlock()
+
+	if _, err := os.Stat(hostDir); err != nil {
+		m.fail(sess, fmt.Errorf("profile dir not found on host: %s", hostDir))
+		return sess, err
+	}
+	err = dockerRun(
+		"run", "-d", "--name", container,
+		"-p", fmt.Sprintf("%d:5800", port),
+		"-v", hostDir+":/config:rw",
+		"-e", "DISPLAY_WIDTH=1280", "-e", "DISPLAY_HEIGHT=900",
+		"-e", "KEEP_APP_RUNNING=1",
+		m.cfg.Image,
+	)
+	if err != nil {
+		m.fail(sess, err)
+		return sess, err
+	}
+	if err := waitPortReady(port, 40*time.Second); err != nil {
+		m.fail(sess, err)
+		return sess, err
+	}
+	m.mu.Lock()
+	sess.Status = "ready"
+	m.mu.Unlock()
+	return sess, nil
+}
+
+func (m *fxLoginMgr) getInspect(accountID string) (*fxSession, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.inspects[accountID]
+	return s, ok
+}
+
+// stopInspect tears down the viewer container. The profile dir is left intact
+// (unlike cancel) because it's the real account profile, not a throwaway.
+func (m *fxLoginMgr) stopInspect(accountID string) error {
+	m.mu.Lock()
+	s, ok := m.inspects[accountID]
+	if !ok {
+		m.mu.Unlock()
+		return errors.New("no inspect session for account")
+	}
+	delete(m.inspects, accountID)
+	m.usedPort[s.Port] = false
+	m.mu.Unlock()
+	_ = exec.Command("docker", "rm", "-f", s.Container).Run()
+	return nil
 }
 
 func (m *fxLoginMgr) allocPort() (int, error) {

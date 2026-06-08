@@ -51,6 +51,12 @@ type Config struct {
 	// YT rows and logs a warning. Get one in Google Cloud Console.
 	YouTubeAPIKey string `env:"YOUTUBE_API_KEY" envDefault:""`
 
+	// Google OAuth client for the youtube_api upload provider (videos.insert).
+	// client_id/secret are global; each account stores its own refresh token.
+	GoogleOAuthClientID     string `env:"GOOGLE_OAUTH_CLIENT_ID" envDefault:""`
+	GoogleOAuthClientSecret string `env:"GOOGLE_OAUTH_CLIENT_SECRET" envDefault:""`
+	GoogleOAuthRedirectURL  string `env:"GOOGLE_OAUTH_REDIRECT_URL" envDefault:"http://localhost:8080/api/youtube-oauth/callback"`
+
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
 }
 

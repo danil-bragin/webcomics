@@ -12,6 +12,31 @@ import (
 	pq "github.com/example/dddcqrs/internal/app/query/projects"
 )
 
+// apiDailyUploadCap ≈ floor(10000 quota / 1600 per videos.insert).
+const apiDailyUploadCap = 6
+
+// applyAccountCapabilities derives upload-method flags from the account's extra
+// JSON and SCRUBS the OAuth refresh token before it's exposed in the view — the
+// token is a secret and must never leave the backend.
+func applyAccountCapabilities(v *pq.SocialAccountView, extraRaw []byte) {
+	v.HasSelenium = v.FirefoxProfilePath != ""
+	v.APIUploadsLimit = apiDailyUploadCap
+	extra := map[string]any{}
+	if len(extraRaw) > 0 {
+		_ = json.Unmarshal(extraRaw, &extra)
+	}
+	if tok, _ := extra["oauth_refresh_token"].(string); tok != "" {
+		v.HasAPI = true
+	}
+	if title, _ := extra["oauth_channel_title"].(string); title != "" {
+		v.OAuthChannelTitle = title
+	}
+	// Scrub secrets before returning extra to clients.
+	delete(extra, "oauth_refresh_token")
+	scrubbed, _ := json.Marshal(extra)
+	v.Extra = json.RawMessage(scrubbed)
+}
+
 type ProjectsModel struct{ pool *pgxpool.Pool }
 
 func NewProjectsModel(pool *pgxpool.Pool) *ProjectsModel {
@@ -123,7 +148,7 @@ func (m *ProjectsModel) ListSocialAccounts(ctx context.Context, projectID string
 			return nil, err
 		}
 		v.ProjectID = projectID
-		v.Extra = json.RawMessage(extraRaw)
+		applyAccountCapabilities(&v, extraRaw)
 		out = append(out, v)
 	}
 	return out, rows.Err()
@@ -140,7 +165,11 @@ func (m *ProjectsModel) ListAllSocialAccounts(ctx context.Context, filterPlatfor
 	             COALESCE(a.is_verified,false), COALESCE(a.min_gap_seconds,60),
 	             a.created_at, a.updated_at,
 	             (SELECT COUNT(*) FROM project_social_account_links WHERE social_account_id = a.id) AS project_count,
-	             (SELECT COUNT(*) FROM pipeline_upload_records WHERE social_account_id = a.id) AS upload_count
+	             (SELECT COUNT(*) FROM pipeline_upload_records WHERE social_account_id = a.id) AS upload_count,
+	             (SELECT COUNT(*) FROM pipeline_upload_records
+	                WHERE social_account_id = a.id AND provider = 'youtube_api'
+	                  AND created_at >= now() - interval '24 hours'
+	                  AND status NOT IN ('failed','rejected')) AS api_uploads_used
 		FROM social_accounts a`
 	args := []any{}
 	if filterPlatform != "" {
@@ -161,10 +190,10 @@ func (m *ProjectsModel) ListAllSocialAccounts(ctx context.Context, filterPlatfor
 			&v.Status, &v.LastUsedAt, &v.CooldownUntil, &v.FailureStreak,
 			&v.DefaultVisibility, &v.DefaultMadeForKids, &v.DefaultCategoryID, &v.DefaultCategoryLabel,
 			&v.DailyUploadLimit, &v.LimitWindowHours, &v.IsVerified, &v.MinGapSeconds,
-			&v.CreatedAt, &v.UpdatedAt, &v.ProjectCount, &v.UploadCount); err != nil {
+			&v.CreatedAt, &v.UpdatedAt, &v.ProjectCount, &v.UploadCount, &v.APIUploadsUsed); err != nil {
 			return nil, err
 		}
-		v.Extra = json.RawMessage(extraRaw)
+		applyAccountCapabilities(&v, extraRaw)
 		out = append(out, v)
 	}
 	return out, rows.Err()

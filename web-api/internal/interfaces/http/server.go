@@ -29,6 +29,14 @@ type Server struct {
 	fxLogin      *fxLoginMgr
 	musicClient  *minio.Client
 	audioLib     *AudioLibHandler
+	llm          captionLLM
+	googleOAuth  *googleOAuth
+}
+
+// captionLLM is the minimal LLM surface the metadata endpoint needs.
+type captionLLM interface {
+	Enabled() bool
+	CompleteJSON(ctx context.Context, system, user string, temperature float64) (string, error)
 }
 
 // uploadsPool is the narrow surface we need from pgxpool — kept as an
@@ -40,6 +48,8 @@ type uploadsPool interface {
 // AssetStore is the minimal surface this transport needs from MinIO/S3.
 type AssetStore interface {
 	PresignGet(ctx context.Context, bucket, key string, ttlSeconds int) (string, error)
+	// ListPrefix returns every object key under prefix, lexically sorted.
+	ListPrefix(ctx context.Context, bucket, prefix string) ([]string, error)
 }
 
 // BalancesProvider — surface needed for GET /api/balances.
@@ -69,6 +79,12 @@ func (s *Server) WithMusicLibrary(c *minio.Client) *Server {
 // WithAudioLibrary mounts /api/audio/* routes if a handler is configured.
 func (s *Server) WithAudioLibrary(h *AudioLibHandler) *Server {
 	s.audioLib = h
+	return s
+}
+
+// WithLLM enables the upload-metadata generation endpoint.
+func (s *Server) WithLLM(c captionLLM) *Server {
+	s.llm = c
 	return s
 }
 
@@ -133,6 +149,9 @@ func (s *Server) Router() http.Handler {
 	r.Post("/api/uploads/presign", s.PresignUploadRef)
 	s.MountFirefoxLogin(r)
 	s.MountUploadRecords(r)
+	s.MountUploadProgress(r)
+	s.MountUploadMetadata(r)
+	s.MountYouTubeOAuth(r)
 	s.MountPresets(r)
 	s.MountFormats(r)
 	s.MountRunDelete(r)

@@ -91,6 +91,15 @@ type SocialAccountView struct {
 	IsDefault            bool            `json:"is_default,omitempty"`
 	ProjectCount         int             `json:"project_count,omitempty"`
 	UploadCount          int             `json:"upload_count,omitempty"`
+	// Upload-method capabilities. HasSelenium = Firefox profile present;
+	// HasAPI = a YouTube API OAuth refresh token is stored. The refresh token
+	// itself is NEVER exposed — it's scrubbed from Extra by the read mapper.
+	HasSelenium       bool   `json:"has_selenium"`
+	HasAPI            bool   `json:"has_api"`
+	OAuthChannelTitle string `json:"oauth_channel_title,omitempty"`
+	// API daily quota (videos.insert ≈ 1600 units, 10k/day ⇒ ~6/day).
+	APIUploadsUsed  int `json:"api_uploads_used"`
+	APIUploadsLimit int `json:"api_uploads_limit"`
 	CreatedAt            time.Time       `json:"created_at"`
 	UpdatedAt            time.Time       `json:"updated_at"`
 }

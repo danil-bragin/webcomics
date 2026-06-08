@@ -19,6 +19,7 @@ import (
 
 	"github.com/example/dddcqrs/internal/app/bus"
 	pipecmd "github.com/example/dddcqrs/internal/app/command/pipeline"
+	schcmd "github.com/example/dddcqrs/internal/app/command/scheduler"
 	umcmd "github.com/example/dddcqrs/internal/app/command/uploadmetrics"
 	"github.com/example/dddcqrs/internal/domain/pipeline"
 )
@@ -54,8 +55,13 @@ func (c *RawCompletionConsumer) Run(ctx context.Context) {
 		{"pipeline.assemble.completed", c.handleAssemble},
 		{"pipeline.assemble.failed", c.handleStepFailed},
 		{"pipeline.upload.completed", c.handleUpload},
+		// Single handler for upload.failed: handleUploadFailed already advances
+		// the run step (RecordStepFailed), patches the UploadRecord, and settles
+		// the schedule row. A second {stream, handleStepFailed} registration
+		// would share this consumer group + name and just steal half the
+		// messages (competing consumers), so the settle/record side silently
+		// dropped. Keep exactly one.
 		{"pipeline.upload.failed", c.handleUploadFailed},
-		{"pipeline.upload.failed", c.handleStepFailed},
 		{"pipeline.caption.completed", c.handleCaption},
 		{"pipeline.caption.failed", c.handleStepFailed},
 		{"pipeline.metrics.completed", c.handleMetricsCompleted},
@@ -208,11 +214,16 @@ func (c *RawCompletionConsumer) handleUpload(ctx context.Context, body []byte) e
 	if err := json.Unmarshal(body, &p); err != nil {
 		return err
 	}
+	// Advance the run step. Best-effort: scheduler-driven uploads use a
+	// synthetic step index (99) that isn't a real run step, so this returns a
+	// "step index mismatch" we must NOT let abort the rest of the handler
+	// (upload-record + schedule-row settling below). Inline pipeline uploads
+	// carry a real index and advance normally.
 	if _, err := bus.Dispatch[pipecmd.RecordStepResult](ctx, c.reg, pipecmd.RecordUploadCompleted{
 		RunID: p.RunID, StepIndex: p.StepIndex,
 		ExternalRef: p.ExternalRef, Cost: p.Cost, DurationMs: p.DurationMs,
 	}); err != nil {
-		return err
+		c.log.Warn("record upload-completed step skipped", "run_id", p.RunID, "step", p.StepIndex, "err", err.Error())
 	}
 	// Best-effort: also mark the matching UploadRecord row uploaded so the UI
 	// sees the youtu.be URL + final visibility without polling YT itself.
@@ -220,6 +231,11 @@ func (c *RawCompletionConsumer) handleUpload(ctx context.Context, body []byte) e
 		RunID: p.RunID, ExternalRef: p.ExternalRef, ExternalID: p.ExternalID,
 		FinalVisibility: p.FinalVisibility,
 		ScreenshotTrail: p.ScreenshotTrail,
+	})
+	// Close the scheduled_uploads row if this upload was scheduler-driven, so
+	// the schedule view shows "completed" instead of a permanent in_flight.
+	_, _ = bus.Dispatch[schcmd.SettleScheduledUploadResult](ctx, c.reg, schcmd.SettleScheduledUpload{
+		RunID: p.RunID, Success: true, ExternalRef: p.ExternalRef,
 	})
 	return nil
 }
@@ -229,16 +245,28 @@ func (c *RawCompletionConsumer) handleUploadFailed(ctx context.Context, body []b
 	if err := json.Unmarshal(body, &p); err != nil {
 		return err
 	}
-	// Advance the run step first.
+	// Advance the run step. Best-effort for the same reason as handleUpload:
+	// scheduler-driven uploads (synthetic step 99) return a step-index mismatch
+	// that must not abort the upload-record + schedule-row settling below.
 	if _, err := bus.Dispatch[pipecmd.RecordStepResult](ctx, c.reg, pipecmd.RecordStepFailed{
 		RunID: p.RunID, StepIndex: p.StepIndex, Error: p.Error,
 	}); err != nil {
-		return err
+		c.log.Warn("record upload-failed step skipped", "run_id", p.RunID, "step", p.StepIndex, "err", err.Error())
 	}
 	// Then patch the UploadRecord with the screenshot + error.
+	// NB: ErrorScreenshotAssetID from the worker is a MinIO OBJECT KEY, not a
+	// pipeline_assets row id — the column has an FK to pipeline_assets, so
+	// passing the key triggers a 23503 FK violation and the whole MarkFailed
+	// aborts (leaving the record stuck "pending"). The failure frame is already
+	// carried in ScreenshotTrail (jsonb, no FK) and in the live screenshot feed,
+	// so drop the id here and let the trail render it.
 	_, _ = bus.Dispatch[pipecmd.MarkUploadRecordFailedResult](ctx, c.reg, pipecmd.MarkUploadRecordFailed{
-		RunID: p.RunID, Error: p.Error, ErrorScreenshotAssetID: p.ErrorScreenshotAssetID,
+		RunID: p.RunID, Error: p.Error, ErrorScreenshotAssetID: "",
 		ScreenshotTrail: p.ScreenshotTrail,
+	})
+	// Close the scheduled_uploads row as failed if scheduler-driven.
+	_, _ = bus.Dispatch[schcmd.SettleScheduledUploadResult](ctx, c.reg, schcmd.SettleScheduledUpload{
+		RunID: p.RunID, Success: false, Error: p.Error,
 	})
 	return nil
 }

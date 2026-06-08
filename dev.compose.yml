@@ -129,6 +129,12 @@ services:
       MINIO_BUCKET: webcomics
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      # YouTube Data API upload (provider youtube_api). Per-channel refresh token
+      # arrives in the upload payload; client id/secret are the global OAuth app.
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      # Headless upload. Per-stage screenshots stream to the run page live; no
+      # VNC (it only showed a black frame and wasn't worth the overhead).
       SELENIUM_HEADLESS: "true"
       GECKODRIVER_PATH: /usr/local/bin/geckodriver
     volumes:

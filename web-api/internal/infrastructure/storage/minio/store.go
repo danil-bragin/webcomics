@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -128,6 +129,25 @@ func (s *Store) RemovePrefix(ctx context.Context, bucket, prefix string) error {
 		}
 	}
 	return nil
+}
+
+// ListPrefix returns every object key under prefix, lexically sorted. Used by
+// the upload-progress endpoint to enumerate live screenshot frames.
+func (s *Store) ListPrefix(ctx context.Context, bucket, prefix string) ([]string, error) {
+	if bucket == "" {
+		bucket = s.bucket
+	}
+	var keys []string
+	for obj := range s.client.ListObjects(ctx, bucket, minio.ListObjectsOptions{
+		Prefix: prefix, Recursive: true,
+	}) {
+		if obj.Err != nil {
+			return nil, obj.Err
+		}
+		keys = append(keys, obj.Key)
+	}
+	sort.Strings(keys)
+	return keys, nil
 }
 
 func (s *Store) PresignPut(ctx context.Context, bucket, key string, ttlSeconds int) (string, error) {

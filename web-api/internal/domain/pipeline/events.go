@@ -113,6 +113,10 @@ type AudioRequested struct {
 	OutputKey       string         `json:"output_key"`
 	PanelCount      int            `json:"panel_count,omitempty"`
 	PanelDurationMs int            `json:"panel_duration_ms,omitempty"`
+	// PanelDurationsMs gives each panel its own slot length (quiz mode: long
+	// question panels, short answer panels). When set it overrides the single
+	// PanelDurationMs for padding. len == PanelCount.
+	PanelDurationsMs []int `json:"panel_durations_ms,omitempty"`
 }
 
 func (AudioRequested) EventName() string { return "pipeline.audio.requested" }

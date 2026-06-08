@@ -239,12 +239,14 @@ func Build(cfg *config.Config) *do.RootScope {
 		projq.ListProjectSocialAccountsOnBus(reg, pjm)
 		projq.ListSocialAccountsGlobalOnBus(reg, pjm)
 		projcmd.SetSocialAccountLimitsOnBus(reg, m)
+		projcmd.SetSocialAccountOAuthOnBus(reg, m)
 
 		// Scheduler.
 		schm := do.MustInvoke[schq.ReadModel](inj)
 		schcmd.ScheduleUploadOnBus(reg, m)
 		schcmd.CancelScheduledUploadOnBus(reg, m)
 		schcmd.RescheduleUploadOnBus(reg, m)
+		schcmd.SettleScheduledUploadOnBus(reg, m)
 		schq.ListScheduledOnBus(reg, schm)
 		schq.GetSlotAvailabilityOnBus(reg, schm)
 

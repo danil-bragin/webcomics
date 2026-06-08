@@ -15,6 +15,7 @@ import (
 	"github.com/example/dddcqrs/internal/app/bus"
 	audiocmd "github.com/example/dddcqrs/internal/app/command/audiolib"
 	"github.com/example/dddcqrs/internal/infrastructure/config"
+	"github.com/example/dddcqrs/internal/infrastructure/llm"
 	miniostore "github.com/example/dddcqrs/internal/infrastructure/storage/minio"
 	httpiface "github.com/example/dddcqrs/internal/interfaces/http"
 	"github.com/example/dddcqrs/internal/infrastructure/persistence/uow"
@@ -66,6 +67,8 @@ func main() {
 				WorkerMountPoint: "/profiles",
 				Image:            "jlesage/firefox:latest",
 			}).
+			WithLLM(llm.New(cfg.OpenRouterAPIKey, os.Getenv("CAPTION_MODEL"))).
+			WithGoogleOAuth(cfg.GoogleOAuthClientID, cfg.GoogleOAuthClientSecret, cfg.GoogleOAuthRedirectURL).
 			Router(),
 	}
 	// In-process scheduler tick loop. Single goroutine — runs alongside the

@@ -352,18 +352,22 @@ func (r *Run) requestStep(idx int, paramsOverride map[string]any) error {
 		// Per-panel timing so the audio worker can stretch / pad voiceover
 		// to match the assemble step's panel cadence.
 		panelDur := assemblePanelDurationMs(r.configSnapshot)
+		// Quiz mode: per-panel slot lengths so the voiceover pads question and
+		// answer panels to the same cadence the renderer shows.
+		quizDurs := assembleQuizDurations(r.configSnapshot, len(captions))
 		audioLang := r.Language()
 		outputKey := fmt.Sprintf("runs/%s/%d/v%d/audio.mp3", r.id, idx, step.currentVersion+1)
 		inputJSON, _ := json.Marshal(map[string]any{
-			"captions":          captions,
-			"prompt":            prompt,
-			"output_key":        outputKey,
-			"model":             cfg.Model,
-			"provider":          cfg.Provider,
-			"language":          audioLang,
-			"params":            cfg.Params,
-			"panel_count":       len(captions),
-			"panel_duration_ms": panelDur,
+			"captions":           captions,
+			"prompt":             prompt,
+			"output_key":         outputKey,
+			"model":              cfg.Model,
+			"provider":           cfg.Provider,
+			"language":           audioLang,
+			"params":             cfg.Params,
+			"panel_count":        len(captions),
+			"panel_duration_ms":  panelDur,
+			"panel_durations_ms": quizDurs,
 		})
 		attempt := step.addAttempt(inputJSON, marshalParams(paramsOverride), upstream, 1, cfg.Provider, cfg.Model)
 		r.Record(AudioRequested{
@@ -371,9 +375,10 @@ func (r *Run) requestStep(idx int, paramsOverride map[string]any) error {
 			StepIndex: idx, StepID: step.id.String(), AttemptID: attempt.id.String(),
 			Captions: captions, Prompt: prompt, Model: cfg.Model, Provider: cfg.Provider,
 			Language: audioLang, Params: cfg.Params,
-			OutputKey:       outputKey,
-			PanelCount:      len(captions),
-			PanelDurationMs: panelDur,
+			OutputKey:        outputKey,
+			PanelCount:       len(captions),
+			PanelDurationMs:  panelDur,
+			PanelDurationsMs: quizDurs,
 		})
 
 	case StepCaption:
@@ -440,6 +445,18 @@ func (r *Run) requestStep(idx int, paramsOverride map[string]any) error {
 		musicKey := r.priorMusicKey()
 		ambientKey, _ := cfg.Params["ambient_object_key"].(string)
 		sfxKeys := collectSFXKeys(refs)
+		// Quiz mode: tick-tock under every question (even) panel — loops across
+		// the long think gap in the renderer. Snapshot-based to match assemblePanels.
+		if assembleQuizDurations(r.configSnapshot, len(refs)) != nil {
+			if sfxKeys == nil {
+				sfxKeys = map[int]string{}
+			}
+			for _, ref := range refs {
+				if ref.Index%2 == 0 {
+					sfxKeys[ref.Index] = quizTickSFXKey
+				}
+			}
+		}
 		outputKey := fmt.Sprintf("runs/%s/%d/v%d/video.mp4", r.id, idx, step.currentVersion+1)
 		width, height, fps := assembleDims(cfg.Params)
 		inputJSON, _ := json.Marshal(map[string]any{
@@ -998,6 +1015,43 @@ func (r *Run) scriptPanels() ([]PanelDef, error) {
 	return nil, errors.New("pipeline: no completed script step before image step")
 }
 
+const quizTickSFXKey = "library/sfx/quiz-tick.mp3"
+
+// quizPanelDurations returns a per-panel slot length for a quiz run: even
+// indices (questions) get ThinkMs, odd indices (answers) get AnswerMs. Returns
+// nil when quiz mode is off, so callers fall back to the single duration.
+func quizPanelDurations(cfg StepConfig, n int) ([]int, quizConfig) {
+	q := quizConfigFrom(cfg.Params)
+	if !q.Enabled || n <= 0 {
+		return nil, q
+	}
+	out := make([]int, n)
+	for i := 0; i < n; i++ {
+		if i%2 == 0 {
+			out[i] = q.ThinkMs
+		} else {
+			out[i] = q.AnswerMs
+		}
+	}
+	// Tail: hold the final panel a bit longer so the last answer + CTA lingers
+	// instead of cutting off abruptly.
+	out[n-1] += q.OutroMs
+	return out, q
+}
+
+// assembleQuizDurations returns per-panel slot lengths if the run's assemble
+// step has quiz_mode on, else nil. Lets the audio step pad each panel to the
+// same cadence the renderer will display.
+func assembleQuizDurations(snapshot []StepConfig, n int) []int {
+	for _, s := range snapshot {
+		if s.Type == StepAssemble {
+			d, _ := quizPanelDurations(s, n)
+			return d
+		}
+	}
+	return nil
+}
+
 func (r *Run) assemblePanels(cfg StepConfig) ([]AssemblePanelRef, error) {
 	// Pull script panels for caption text fallback (when timeline editor hasn't
 	// supplied per-panel captions and subtitles are enabled in cfg.Params).
@@ -1021,6 +1075,10 @@ func (r *Run) assemblePanels(cfg StepConfig) ([]AssemblePanelRef, error) {
 			return nil, fmt.Errorf("pipeline: parse image outputs: %w", err)
 		}
 		dur, transition := assembleDefaults(cfg.Params)
+		// Quiz mode: question (even) panels run long for the think gap, answer
+		// (odd) panels run short. Read from the snapshot (same proven path the
+		// audio step uses) so it can't diverge from cfg merging. nil when off.
+		quizDurs := assembleQuizDurations(r.configSnapshot, len(arr))
 		// timeline.panels is an optional rich override keyed by panel index.
 		// Built by the timeline editor; pipes through to the renderer per panel.
 		timeline := timelinePanelsByIndex(cfg.Params)
@@ -1029,10 +1087,14 @@ func (r *Run) assemblePanels(cfg StepConfig) ([]AssemblePanelRef, error) {
 			key, _ := entry["object_key"].(string)
 			idxF, _ := entry["index"].(float64)
 			idx := int(idxF)
+			panelDur := dur
+			if quizDurs != nil && idx >= 0 && idx < len(quizDurs) {
+				panelDur = quizDurs[idx]
+			}
 			ref := AssemblePanelRef{
 				Index:      idx,
 				ObjectKey:  key,
-				DurationMs: dur,
+				DurationMs: panelDur,
 				Transition: transition,
 			}
 			if tl, ok := timeline[idx]; ok {

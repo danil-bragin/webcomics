@@ -49,6 +49,35 @@ func assemblePanelDurationMs(steps []StepConfig) int {
 	return 2500
 }
 
+// quizConfig pulls quiz cadence from an assemble step's params. quiz_mode=true
+// turns on the paired-panel (even=question / odd=answer) timing.
+type quizConfig struct {
+	Enabled  bool
+	ThinkMs  int // duration of each question panel (narration + tick gap)
+	AnswerMs int // duration of each answer panel
+	OutroMs  int // extra time added to the final panel so the last answer + CTA lingers
+}
+
+func quizConfigFrom(params map[string]any) quizConfig {
+	q := quizConfig{ThinkMs: 8000, AnswerMs: 4000, OutroMs: 3000}
+	if params == nil {
+		return q
+	}
+	if v, ok := params["quiz_mode"].(bool); ok {
+		q.Enabled = v
+	}
+	if v, ok := params["quiz_think_ms"].(float64); ok && v > 0 {
+		q.ThinkMs = int(v)
+	}
+	if v, ok := params["quiz_answer_ms"].(float64); ok && v > 0 {
+		q.AnswerMs = int(v)
+	}
+	if v, ok := params["quiz_outro_ms"].(float64); ok && v >= 0 {
+		q.OutroMs = int(v)
+	}
+	return q
+}
+
 // anchorModel returns the model to use for panel 0 in ref modes. Falls back
 // to flux/schnell when the image step config doesn't override it.
 func anchorModel(cfg StepConfig) string {
