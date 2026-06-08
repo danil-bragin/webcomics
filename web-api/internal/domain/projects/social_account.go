@@ -97,6 +97,43 @@ func (s *SocialAccount) Platform() string             { return s.platform }
 func (s *SocialAccount) Label() string                { return s.label }
 func (s *SocialAccount) FirefoxProfilePath() string   { return s.firefoxProfilePath }
 func (s *SocialAccount) Extra() map[string]any        { return s.extra }
+
+// OAuthRefreshToken returns the stored YouTube API refresh token (in extra), or
+// "" when the account hasn't been connected for API upload.
+func (s *SocialAccount) OAuthRefreshToken() string {
+	if s.extra == nil {
+		return ""
+	}
+	v, _ := s.extra["oauth_refresh_token"].(string)
+	return v
+}
+
+// OAuthChannelTitle returns the channel title captured at OAuth connect time.
+func (s *SocialAccount) OAuthChannelTitle() string {
+	if s.extra == nil {
+		return ""
+	}
+	v, _ := s.extra["oauth_channel_title"].(string)
+	return v
+}
+
+// HasAPIUpload reports whether the account can upload via the YouTube Data API.
+func (s *SocialAccount) HasAPIUpload() bool { return s.OAuthRefreshToken() != "" }
+
+// HasSeleniumUpload reports whether the account can upload via the Firefox flow.
+func (s *SocialAccount) HasSeleniumUpload() bool { return s.firefoxProfilePath != "" }
+
+// SetOAuth stores the YouTube API refresh token + channel title on the account.
+func (s *SocialAccount) SetOAuth(refreshToken, channelTitle string) {
+	if s.extra == nil {
+		s.extra = map[string]any{}
+	}
+	now := time.Now().UTC()
+	s.extra["oauth_refresh_token"] = refreshToken
+	s.extra["oauth_channel_title"] = channelTitle
+	s.extra["oauth_connected_at"] = now.Format(time.RFC3339)
+	s.updatedAt = now
+}
 func (s *SocialAccount) Status() SocialAccountStatus  { return s.status }
 func (s *SocialAccount) LastUsedAt() *time.Time       { return s.lastUsedAt }
 func (s *SocialAccount) CooldownUntil() *time.Time    { return s.cooldownUntil }

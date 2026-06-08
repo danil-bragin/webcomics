@@ -519,6 +519,41 @@ func SetSocialAccountLimitsOnBus(r *bus.Registry, m uow.Manager) {
 	bus.RegisterCommand[SetSocialAccountLimits, SetSocialAccountLimitsResult](r, NewSetSocialAccountLimitsHandler(m))
 }
 
+// --- SetSocialAccountOAuth (YouTube API connect callback persists here) ---
+
+type SetSocialAccountOAuth struct {
+	ID           string
+	RefreshToken string
+	ChannelTitle string
+}
+
+func (SetSocialAccountOAuth) IsCommand() {}
+
+type SetSocialAccountOAuthResult struct{}
+
+type SetSocialAccountOAuthHandler struct{ uow uow.Manager }
+
+func NewSetSocialAccountOAuthHandler(m uow.Manager) *SetSocialAccountOAuthHandler {
+	return &SetSocialAccountOAuthHandler{uow: m}
+}
+
+func (h *SetSocialAccountOAuthHandler) Handle(ctx context.Context, cmd SetSocialAccountOAuth) (SetSocialAccountOAuthResult, error) {
+	err := h.uow.WithinTx(ctx, func(ctx context.Context, u uow.UnitOfWork) error {
+		repo := u.Repositories().Projects()
+		acct, err := repo.GetSocialAccount(ctx, projects.SocialAccountID(cmd.ID))
+		if err != nil {
+			return err
+		}
+		acct.SetOAuth(cmd.RefreshToken, cmd.ChannelTitle)
+		return repo.SaveSocialAccount(ctx, acct)
+	})
+	return SetSocialAccountOAuthResult{}, err
+}
+
+func SetSocialAccountOAuthOnBus(r *bus.Registry, m uow.Manager) {
+	bus.RegisterCommand[SetSocialAccountOAuth, SetSocialAccountOAuthResult](r, NewSetSocialAccountOAuthHandler(m))
+}
+
 func UpsertSocialAccountOnBus(r *bus.Registry, m uow.Manager) {
 	bus.RegisterCommand[UpsertSocialAccount, UpsertSocialAccountResult](r, NewUpsertSocialAccountHandler(m))
 }

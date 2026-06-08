@@ -1,7 +1,9 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -10,6 +12,21 @@ import (
 	projcmd "github.com/example/dddcqrs/internal/app/command/projects"
 	projq "github.com/example/dddcqrs/internal/app/query/projects"
 )
+
+// findSocialAccount resolves a global social account by id via the list query
+// (no single-account read exists yet; the library is small).
+func (s *Server) findSocialAccount(ctx context.Context, id string) (projq.SocialAccountView, error) {
+	all, err := bus.Ask[[]projq.SocialAccountView](ctx, s.reg, projq.ListSocialAccountsGlobal{})
+	if err != nil {
+		return projq.SocialAccountView{}, err
+	}
+	for _, a := range all {
+		if a.ID == id {
+			return a, nil
+		}
+	}
+	return projq.SocialAccountView{}, fmt.Errorf("social account %s not found", id)
+}
 
 // MountSocial wires the global /api/social/* routes + the link/unlink/default
 // endpoints under /api/projects/:id/social-accounts/:aid.
@@ -85,6 +102,57 @@ func (s *Server) MountSocial(r chi.Router) {
 		id := chi.URLParam(req, "id")
 		if _, err := bus.Dispatch[projcmd.DeleteSocialAccountResult](req.Context(), s.reg, projcmd.DeleteSocialAccount{ID: id}); err != nil {
 			writeErr(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// --- Inspect session: open a viewable Firefox on the account's profile so
+	// the user can watch the live session over noVNC and verify auth works. ---
+
+	r.Post("/api/social/accounts/{id}/inspect", func(w http.ResponseWriter, req *http.Request) {
+		if s.fxLogin == nil {
+			writeErr(w, http.StatusServiceUnavailable, "firefox viewer disabled: set FIREFOX_PROFILES_DIR env")
+			return
+		}
+		id := chi.URLParam(req, "id")
+		acct, err := s.findSocialAccount(req.Context(), id)
+		if err != nil {
+			writeErr(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if acct.FirefoxProfilePath == "" {
+			writeErr(w, http.StatusUnprocessableEntity, "account has no firefox profile")
+			return
+		}
+		sess, err := s.fxLogin.inspect(req.Context(), id, acct.FirefoxProfilePath, acct.Label)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, sess)
+			return
+		}
+		writeJSON(w, http.StatusOK, sess)
+	})
+
+	r.Get("/api/social/accounts/{id}/inspect", func(w http.ResponseWriter, req *http.Request) {
+		if s.fxLogin == nil {
+			writeErr(w, http.StatusServiceUnavailable, "firefox viewer disabled")
+			return
+		}
+		sess, ok := s.fxLogin.getInspect(chi.URLParam(req, "id"))
+		if !ok {
+			writeJSON(w, http.StatusOK, map[string]any{"status": "none"})
+			return
+		}
+		writeJSON(w, http.StatusOK, sess)
+	})
+
+	r.Post("/api/social/accounts/{id}/inspect/stop", func(w http.ResponseWriter, req *http.Request) {
+		if s.fxLogin == nil {
+			writeErr(w, http.StatusServiceUnavailable, "firefox viewer disabled")
+			return
+		}
+		if err := s.fxLogin.stopInspect(chi.URLParam(req, "id")); err != nil {
+			writeErr(w, http.StatusNotFound, err.Error())
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
